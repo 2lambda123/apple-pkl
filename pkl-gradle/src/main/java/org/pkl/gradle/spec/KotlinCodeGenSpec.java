@@ -19,5 +19,13 @@ import org.gradle.api.provider.Property;
 
 /** Configuration options for Kotlin code generators. Documented in user manual. */
 public interface KotlinCodeGenSpec extends CodeGenSpec {
+  Property<String> getIndent();
+
+  Property<String> getKotlinPackage();
+
   Property<Boolean> getGenerateKdoc();
+
+  Property<Boolean> getImplementSerializable();
+
+  Property<Boolean> getImplementKSerializable();
 }

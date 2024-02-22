@@ -22,6 +22,7 @@ import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.memberProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatCode
+import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -130,12 +131,13 @@ class KotlinCodeGeneratorTest {
     private val propertyTypesClasses by lazy { compileKotlinCode(propertyTypesKotlinCode) }
 
     private fun generateKotlinCode(
-      pklCode: String,
+      @Language("pkl") pklCode: String,
       generateKdoc: Boolean = false,
       generateSpringBootConfig: Boolean = false,
-      implementSerializable: Boolean = false
+      implementSerializable: Boolean = false,
+      implementKSerializable: Boolean = false,
+      kotlinPackage: String? = null,
     ): String {
-
       val module = Evaluator.preconfigured().evaluateSchema(ModuleSource.text(pklCode))
 
       val generator =
@@ -144,7 +146,9 @@ class KotlinCodeGeneratorTest {
           KotlinCodegenOptions(
             generateKdoc = generateKdoc,
             generateSpringBootConfig = generateSpringBootConfig,
-            implementSerializable = implementSerializable
+            kotlinPackage = kotlinPackage ?: "",
+            implementSerializable = implementSerializable,
+            implementKSerializable = implementKSerializable,
           )
         )
       return generator.kotlinFile
@@ -439,6 +443,7 @@ class KotlinCodeGeneratorTest {
       )
     val kotlinCode =
       generateKotlinCode(
+        // language=text
         """
       module my.mod
       typealias MyTypeAlias = ${cases.joinToString(" | ") { "\"${it.first}\"" }}
@@ -545,6 +550,238 @@ class KotlinCodeGeneratorTest {
           val friends: Map<String, Person>,
           val sibling: Person?
         )
+      }
+    """,
+      kotlinCode
+    )
+
+    assertCompilesSuccessfully(kotlinCode)
+  }
+
+  @Test
+  fun `custom kotlin package prefix`() {
+    val kotlinCode =
+      generateKotlinCode(
+        """
+      module my.mod
+
+      class Person {
+        name: String
+        age: Int
+        hobbies: List<String>
+        friends: Map<String, Person>
+        sibling: Person?
+      }
+    """,
+        kotlinPackage = "cool.pkg.path",
+      )
+
+    assertEqualTo(
+      """
+      package cool.pkg.path.my
+
+      import kotlin.Long
+      import kotlin.String
+      import kotlin.collections.List
+      import kotlin.collections.Map
+
+      object Mod {
+        data class Person(
+          val name: String,
+          val age: Long,
+          val hobbies: List<String>,
+          val friends: Map<String, Person>,
+          val sibling: Person?
+        )
+      }
+    """,
+      kotlinCode
+    )
+
+    assertCompilesSuccessfully(kotlinCode)
+  }
+
+  @Test
+  fun `empty kotlin package prefix`() {
+    val kotlinCode =
+      generateKotlinCode(
+        """
+      module my.mod
+
+      class Person {
+        name: String
+        age: Int
+        hobbies: List<String>
+        friends: Map<String, Person>
+        sibling: Person?
+      }
+    """,
+        kotlinPackage = "",
+      )
+
+    assertEqualTo(
+      """
+      package my
+
+      import kotlin.Long
+      import kotlin.String
+      import kotlin.collections.List
+      import kotlin.collections.Map
+
+      object Mod {
+        data class Person(
+          val name: String,
+          val age: Long,
+          val hobbies: List<String>,
+          val friends: Map<String, Person>,
+          val sibling: Person?
+        )
+      }
+    """,
+      kotlinCode
+    )
+
+    assertCompilesSuccessfully(kotlinCode)
+  }
+
+  @Test
+  fun `data class implementing serializable`() {
+    val kotlinCode =
+      generateKotlinCode(
+        /* language=pkl */
+        """
+      module my.mod
+
+      class Person {
+        name: String
+        age: Int
+        hobbies: List<String>
+        friends: Map<String, Person>
+        sibling: Person?
+      }
+    """,
+        implementSerializable = true,
+      )
+
+    assertEqualTo(
+      """
+      package my
+
+      import java.io.Serializable
+      import kotlin.Long
+      import kotlin.String
+      import kotlin.collections.List
+      import kotlin.collections.Map
+
+      object Mod {
+        data class Person(
+          val name: String,
+          val age: Long,
+          val hobbies: List<String>,
+          val friends: Map<String, Person>,
+          val sibling: Person?
+        ) : Serializable {
+          companion object {
+            private const val serialVersionUID: Long = 0L
+          }
+        }
+      }
+    """,
+      kotlinCode
+    )
+
+    assertCompilesSuccessfully(kotlinCode)
+  }
+
+  @Test
+  fun `data class implementing kserializable`() {
+    val kotlinCode =
+      generateKotlinCode(
+        /* language=pkl */
+        """
+      module my.mod
+
+      class Person {
+        name: String
+        age: Int
+        hobbies: List<String>
+        friends: Map<String, Person>
+        sibling: Person?
+      }
+    """,
+        implementKSerializable = true,
+      )
+
+    assertEqualTo(
+      """
+      package my
+
+      import kotlin.Long
+      import kotlin.String
+      import kotlin.collections.List
+      import kotlin.collections.Map
+      import kotlinx.serialization.Serializable
+
+      object Mod {
+        @Serializable
+        data class Person(
+          val name: String,
+          val age: Long,
+          val hobbies: List<String>,
+          val friends: Map<String, Person>,
+          val sibling: Person?
+        )
+      }
+    """,
+      kotlinCode
+    )
+
+    assertCompilesSuccessfully(kotlinCode)
+  }
+
+  @Test
+  fun `data class implementing all serialization`() {
+    val kotlinCode =
+      generateKotlinCode(
+        /* language=pkl */
+        """
+      module my.mod
+
+      class Person {
+        name: String
+        age: Int
+        hobbies: List<String>
+        friends: Map<String, Person>
+        sibling: Person?
+      }
+    """,
+        implementSerializable = true,
+        implementKSerializable = true,
+      )
+
+    assertEqualTo(
+      """
+      package my
+
+      import kotlin.Long
+      import kotlin.String
+      import kotlin.collections.List
+      import kotlin.collections.Map
+      import kotlinx.serialization.Serializable
+
+      object Mod {
+        @Serializable
+        data class Person(
+          val name: String,
+          val age: Long,
+          val hobbies: List<String>,
+          val friends: Map<String, Person>,
+          val sibling: Person?
+        ) : java.io.Serializable {
+          companion object {
+            private const val serialVersionUID: Long = 0L
+          }
+        }
       }
     """,
       kotlinCode
@@ -933,6 +1170,7 @@ class KotlinCodeGeneratorTest {
   fun `user defined type aliases`() {
     val kotlinCode =
       generateKotlinCode(
+        // language=text
         """
       module mod
 

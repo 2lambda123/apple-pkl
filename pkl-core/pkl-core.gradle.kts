@@ -1,16 +1,23 @@
+import com.diffplug.gradle.spotless.SpotlessExtension
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
   kotlin("jvm") // for `src/generator/kotlin`
-  pklAllProjects
-  pklJavaLibrary
-  pklPublishLibrary
-  pklNativeBuild
+  id("pklAllProjects")
+  id("pklJavaLibrary")
+  id("pklPublishLibrary")
+  id("pklNativeBuild")
   antlr
   idea
 }
 
+description = "Pkl core language"
+
+val moduleName = "pkl.core"
 val generatorSourceSet = sourceSets.register("generator")
+val extraJavacArgs = listOf(
+  "--add-reads=$moduleName=ALL-UNNAMED",
+)
 
 sourceSets {
   main {
@@ -61,7 +68,7 @@ dependencies {
 
   add("generatorImplementation", libs.javaPoet)
   add("generatorImplementation", libs.truffleApi)
-  add("generatorImplementation", libs.kotlinStdLib)
+  add("generatorImplementation", libs.kotlinStdlib)
 
   javaExecutableConfiguration(project(":pkl-cli", "javaExecutable"))
 }
@@ -70,12 +77,12 @@ publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-core")
-        description.set("""
+        url = "https://github.com/apple/pkl/tree/main/pkl-core"
+        description = """
           Core implementation of the Pkl configuration language.
           Includes Java APIs for embedding the language into JVM applications,
           and for building libraries and tools on top of the language.
-        """.trimIndent())
+        """.trimIndent()
       }
     }
   }
@@ -97,10 +104,24 @@ tasks.generateGrammarSource {
 
 tasks.compileJava {
   dependsOn(tasks.generateGrammarSource)
+
+  options.compilerArgumentProviders.add(CommandLineArgumentProvider {
+    extraJavacArgs
+  })
 }
 
 tasks.sourcesJar {
   dependsOn(tasks.generateGrammarSource)
+}
+
+listOf(
+  tasks.jar,
+  tasks.javadocJar,
+  tasks.sourcesJar,
+).forEach {
+  it {
+    outputs.cacheIf { true }
+  }
 }
 
 tasks.generateTestGrammarSource {
@@ -129,7 +150,7 @@ tasks.processResources {
       include("*.pkl") 
       exclude("doc-package-info.pkl")
     }.map { "pkl:" + it.nameWithoutExtension } 
-      .sortedBy { it.toLowerCase() }
+      .sortedBy { it.lowercase() }
     
     filter<ReplaceTokens>("tokens" to mapOf(
         "version" to buildInfo.pklVersion,
@@ -146,7 +167,7 @@ tasks.processResources {
 }
 
 tasks.compileJava {
-  options.generatedSourceOutputDirectory.set(file("generated/truffle"))
+  options.generatedSourceOutputDirectory = file("generated/truffle")
 }
 
 tasks.compileKotlin {
@@ -154,6 +175,8 @@ tasks.compileKotlin {
 }
 
 tasks.test {
+  jvmArgs(extraJavacArgs)
+
   inputs.dir("src/test/files/LanguageSnippetTests/input")
   inputs.dir("src/test/files/LanguageSnippetTests/input-helper")
   inputs.dir("src/test/files/LanguageSnippetTests/output")
@@ -282,12 +305,12 @@ tasks.testNative {
 
 tasks.clean {
   delete("generated/")
-  delete("$buildDir/test-packages")
+  delete(layout.buildDirectory.dir("test-packages"))
 }
 
 spotless {
   antlr4 {
-    licenseHeaderFile(rootProject.file("buildSrc/src/main/resources/license-header.star-block.txt"))
+    licenseHeaderFile(rootProject.file("build-logic/src/main/resources/license-header.star-block.txt"))
     target(files("src/main/antlr/PklParser.g4", "src/main/antlr/PklLexer.g4"))
   }
 }

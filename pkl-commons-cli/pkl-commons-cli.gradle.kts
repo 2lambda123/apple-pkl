@@ -1,8 +1,11 @@
 plugins {
-  pklAllProjects
-  pklKotlinLibrary
-  pklPublishLibrary
+  id("pklAllProjects")
+  id("pklJvmLibrary")
+  id("pklPureKotlin")
+  id("pklPublishLibrary")
 }
+
+description = "Pkl commons for CLI (internal)"
 
 dependencies {
   api(projects.pklCore)
@@ -20,8 +23,8 @@ publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-commons-cli")
-        description.set("Internal CLI utilities. NOT A PUBLIC API.")
+        url = "https://github.com/apple/pkl/tree/main/pkl-commons-cli"
+        description = "Internal CLI utilities. NOT A PUBLIC API."
       }
     }
   }

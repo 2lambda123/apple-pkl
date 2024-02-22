@@ -1,13 +1,14 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
-  pklAllProjects
-  pklKotlinLibrary
-  pklPublishLibrary
-  pklHtmlValidator
+  id("pklAllProjects")
+  id("pklJvmLibrary")
+  id("pklPureKotlin")
+  id("pklPublishLibrary")
+  id("pklHtmlValidator")
   @Suppress("DSL_SCOPE_VIOLATION") // https://youtrack.jetbrains.com/issue/KTIJ-19369
-  alias(libs.plugins.kotlinxSerialization)
+  id(libs.plugins.kotlinxSerialization.get().pluginId)
 }
+
+description = "Pkl documentation generator"
 
 val graalVmBaseDir = buildInfo.graalVm.baseDir
 
@@ -36,8 +37,8 @@ publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-doc")
-        description.set("Documentation generator for Pkl modules.")
+        url = "https://github.com/apple/pkl/tree/main/pkl-doc"
+        description = "Documentation generator for Pkl modules."
       }
     }
   }

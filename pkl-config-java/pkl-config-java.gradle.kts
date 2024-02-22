@@ -1,10 +1,12 @@
 plugins {
-  pklAllProjects
-  pklJavaLibrary
-  pklFatJar
-  pklPublishLibrary
+  id("pklAllProjects")
+  id("pklJavaLibrary")
+  id("pklFatJar")
+  id("pklPublishLibrary")
   signing
 }
+
+description = "Pkl code generator for Java"
 
 val pklCodegenJava: Configuration by configurations.creating
 val firstPartySourcesJars by configurations.existing
@@ -14,7 +16,7 @@ val generateTestConfigClasses by tasks.registering(JavaExec::class) {
   inputs.dir("src/test/resources/codegenPkl")
 
   classpath = pklCodegenJava
-  mainClass.set("org.pkl.codegen.java.Main")
+  mainClass = "org.pkl.codegen.java.Main"
   args("--output-dir", "build/testConfigClasses")
   args("--generate-javadoc")
   args(fileTree("src/test/resources/codegenPkl"))
@@ -74,23 +76,23 @@ dependencies {
 }
 
 tasks.shadowJar {
-  archiveBaseName.set("pkl-config-java-all")
+  archiveBaseName = "pkl-config-java-all"
 }
 
 publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-config-java")
-        description.set("Java config library based on the Pkl config language.")
+        url = "https://github.com/apple/pkl/tree/main/pkl-config-java"
+        description = "Java config library based on the Pkl config language."
       }
     }
 
     named<MavenPublication>("fatJar") {
       artifactId = "pkl-config-java-all"
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-config-java")
-        description.set("Shaded fat Jar for pkl-config-java, a Java config library based on the Pkl config language.")
+        url = "https://github.com/apple/pkl/tree/main/pkl-config-java"
+        description = "Shaded fat Jar for pkl-config-java, a Java config library based on the Pkl config language."
       }
     }
   }

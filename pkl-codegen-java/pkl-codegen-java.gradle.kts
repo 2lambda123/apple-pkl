@@ -1,8 +1,11 @@
 plugins {
-  pklAllProjects
-  pklKotlinLibrary
-  pklPublishLibrary
+  id("pklAllProjects")
+  id("pklJvmLibrary")
+  id("pklKotlinLibrary")
+  id("pklPublishLibrary")
 }
+
+description = "Pkl runtime library for JVM"
 
 dependencies {
   // CliJavaCodeGeneratorOptions exposes CliBaseOptions
@@ -33,11 +36,11 @@ publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-codegen-java")
-        description.set("""
+        url = "https://github.com/apple/pkl/tree/main/pkl-codegen-java"
+        description = """
           Java source code generator that generates corresponding Java classes for Pkl classes,
           simplifying consumption of Pkl configuration as statically typed Java objects.
-        """.trimIndent())
+        """.trimIndent()
       }
     }
   }

@@ -1,5 +1,6 @@
 # macOS
 .DS_STORE
+.codebase/
 
 # Gradle
 .gradle/
@@ -18,3 +19,6 @@ generated/
 # :pkl-core:makeIntelliJAntlrPluginHappy
 gen/
 PklLexer.tokens
+
+gradle-user-home
+profile-out

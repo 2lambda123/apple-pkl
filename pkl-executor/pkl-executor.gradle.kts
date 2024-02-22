@@ -1,9 +1,10 @@
 plugins {
-  pklAllProjects
-  pklJavaLibrary
-  pklPublishLibrary
-  pklKotlinTest
+  id("pklAllProjects")
+  id("pklJavaLibrary")
+  id("pklPublishLibrary")
 }
+
+description = "Pkl execution engine"
 
 val pklDistribution: Configuration by configurations.creating
 
@@ -32,10 +33,10 @@ publishing {
   publications {
     named<MavenPublication>("library") {
       pom {
-        url.set("https://github.com/apple/pkl/tree/main/pkl-executor")
-        description.set("""
+        url = "https://github.com/apple/pkl/tree/main/pkl-executor"
+        description = """
           Library for executing Pkl code in a sandboxed environment.
-        """.trimIndent())
+        """.trimIndent()
       }
     }
   }

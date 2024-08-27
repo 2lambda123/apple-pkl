@@ -50,7 +50,7 @@ constructor(
         throw CliException(
           """
           Usage: pkl test [OPTIONS] <modules>...
-          
+
           Error: Missing argument "<modules>"
         """
             .trimIndent()
@@ -77,7 +77,7 @@ constructor(
                 """
                   Cannot generate JUnit report for $moduleUri.
                   A report with the same name was already generated.
-                  
+
                   To fix, provide a different name for this module by adding a module header.
                 """
                   .trimIndent()

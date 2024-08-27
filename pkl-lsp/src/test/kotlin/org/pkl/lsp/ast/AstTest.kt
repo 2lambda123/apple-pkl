@@ -57,7 +57,7 @@ class AstTest {
         /// This is a module.
         ///
         /// This is another line of doc comment.
-        
+
       """
           .trimIndent()
       )

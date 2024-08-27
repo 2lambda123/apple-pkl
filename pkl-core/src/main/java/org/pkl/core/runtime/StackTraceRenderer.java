@@ -36,18 +36,16 @@ public final class StackTraceRenderer {
     this.frameTransformer = frameTransformer;
   }
 
-  public void render(List<StackFrame> frames, @Nullable String hint, StringBuilder builder) {
+  public void render(List<StackFrame> frames, @Nullable String hint,
+                     StringBuilder builder) {
     var compressed = compressFrames(frames);
     doRender(compressed, hint, builder, "", true);
   }
 
   // non-private for testing
-  void doRender(
-      List<Object /*StackFrame|StackFrameLoop*/> frames,
-      @Nullable String hint,
-      StringBuilder builder,
-      String leftMargin,
-      boolean isFirstElement) {
+  void doRender(List<Object /*StackFrame|StackFrameLoop*/> frames,
+                @Nullable String hint, StringBuilder builder, String leftMargin,
+                boolean isFirstElement) {
     var out = ansi(builder);
     for (var frame : frames) {
       if (frame instanceof StackFrameLoop loop) {
@@ -79,7 +77,7 @@ public final class StackTraceRenderer {
         if (!isFirstElement) {
           out.fgBright(frameColor).a(leftMargin).reset().a('\n');
         }
-        renderFrame((StackFrame) frame, builder, leftMargin);
+        renderFrame((StackFrame)frame, builder, leftMargin);
       }
 
       if (isFirstElement) {
@@ -89,14 +87,17 @@ public final class StackTraceRenderer {
     }
   }
 
-  private void renderFrame(StackFrame frame, StringBuilder builder, String leftMargin) {
+  private void renderFrame(StackFrame frame, StringBuilder builder,
+                           String leftMargin) {
     var transformed = frameTransformer.apply(frame);
     renderSourceLine(transformed, builder, leftMargin);
     renderSourceLocation(transformed, builder, leftMargin);
   }
 
-  private void renderHint(@Nullable String hint, StringBuilder builder, String leftMargin) {
-    if (hint == null || hint.isEmpty()) return;
+  private void renderHint(@Nullable String hint, StringBuilder builder,
+                          String leftMargin) {
+    if (hint == null || hint.isEmpty())
+      return;
     var out = ansi(builder);
 
     out.a('\n');
@@ -105,16 +106,16 @@ public final class StackTraceRenderer {
     out.a('\n');
   }
 
-  private void renderSourceLine(StackFrame frame, StringBuilder builder, String leftMargin) {
+  private void renderSourceLine(StackFrame frame, StringBuilder builder,
+                                String leftMargin) {
     var out = ansi(builder);
     var originalSourceLine = frame.getSourceLines().get(0);
     var leadingWhitespace = VmUtils.countLeadingWhitespace(originalSourceLine);
     var sourceLine = originalSourceLine.strip();
     var startColumn = frame.getStartColumn() - leadingWhitespace;
-    var endColumn =
-        frame.getStartLine() == frame.getEndLine()
-            ? frame.getEndColumn() - leadingWhitespace
-            : sourceLine.length();
+    var endColumn = frame.getStartLine() == frame.getEndLine()
+                        ? frame.getEndColumn() - leadingWhitespace
+                        : sourceLine.length();
 
     var prefix = frame.getStartLine() + " | ";
     out.fgBright(frameColor)
@@ -125,20 +126,21 @@ public final class StackTraceRenderer {
         .a(sourceLine)
         .a('\n');
     out.fgBright(frameColor).a(leftMargin).reset();
-    //noinspection StringRepeatCanBeUsed
+    // noinspection StringRepeatCanBeUsed
     for (int i = 1; i < prefix.length() + startColumn; i++) {
       out.append(' ');
     }
 
     out.fgRed();
-    //noinspection StringRepeatCanBeUsed
+    // noinspection StringRepeatCanBeUsed
     for (int i = startColumn; i <= endColumn; i++) {
       out.a('^');
     }
     out.reset().a('\n');
   }
 
-  private void renderSourceLocation(StackFrame frame, StringBuilder builder, String leftMargin) {
+  private void renderSourceLocation(StackFrame frame, StringBuilder builder,
+                                    String leftMargin) {
     var out = ansi(builder);
     out.fgBright(frameColor).a(leftMargin).reset().a("at ");
     if (frame.getMemberName() != null) {
@@ -150,8 +152,8 @@ public final class StackTraceRenderer {
   }
 
   /**
-   * `StackFrame` and `StackFrameLoop` don't currently have a common base interface because the
-   * former is public API and the latter isn't.
+   * `StackFrame` and `StackFrameLoop` don't currently have a common base
+   * interface because the former is public API and the latter isn't.
    */
   // non-private for testing
   static class StackFrameLoop {
@@ -165,14 +167,18 @@ public final class StackTraceRenderer {
   }
 
   // non-private for testing
-  static List<Object /*StackFrame|StackFrameLoop*/> compressFrames(List<StackFrame> frames) {
-    return doCompressFrames(frames, new int[frames.size()], new ArrayList<>(), 0, frames.size());
+  static List<Object /*StackFrame|StackFrameLoop*/>
+  compressFrames(List<StackFrame> frames) {
+    return doCompressFrames(frames, new int[frames.size()], new ArrayList<>(),
+                            0, frames.size());
   }
 
-  private static List<Object /*StackFrame|StackFrameLoop*/> doCompressFrames(
-      List<StackFrame> frames, int[] lpps, List<Object> result, int beginning, int ending) {
+  private static List<Object /*StackFrame|StackFrameLoop*/>
+  doCompressFrames(List<StackFrame> frames, int[] lpps, List<Object> result,
+                   int beginning, int ending) {
     // Algorithm was written with reversed `frames` in mind.
-    // Instead of reversing `frames`, we invert indices passed to `frames.get()`.
+    // Instead of reversing `frames`, we invert indices passed to
+    // `frames.get()`.
     var framesLastIndex = frames.size() - 1;
 
     var totalSize = ending - beginning;
@@ -182,7 +188,7 @@ public final class StackTraceRenderer {
     var patternWidth = -2;
     var matchEnd = -2;
 
-    loopSearch:
+  loopSearch:
     for (int i = beginning; i < ending; i++) {
       var best = i;
       var len = 0;
@@ -201,8 +207,9 @@ public final class StackTraceRenderer {
           if (len > lpps[best]) {
             best = j;
           } else if (len > 0 && len == lpps[j - 1]) {
-            // Degenerative; e.g. ABAAB; we don't care for "prefixes that are suffixes" for a
-            // non-empty infix. In other words, we only look for regex `P+P` and not `P+IP`
+            // Degenerative; e.g. ABAAB; we don't care for "prefixes that are
+            // suffixes" for a non-empty infix. In other words, we only look for
+            // regex `P+P` and not `P+IP`
             continue loopSearch;
           }
           j++;
@@ -225,11 +232,10 @@ public final class StackTraceRenderer {
     if (maxLength > 1) {
       patternWidth = matchEnd - lpps[matchEnd] - patternStart + 1;
       doCompressFrames(frames, lpps, result, matchEnd + 1, ending);
-      result.add(
-          new StackFrameLoop(
-              doCompressFrames(
-                  frames, lpps, new ArrayList<>(), patternStart, patternStart + patternWidth),
-              maxLength / patternWidth));
+      result.add(new StackFrameLoop(
+          doCompressFrames(frames, lpps, new ArrayList<>(), patternStart,
+                           patternStart + patternWidth),
+          maxLength / patternWidth));
       doCompressFrames(frames, lpps, result, beginning, patternStart);
     } else {
       // No patterns found in frames[beginning...ending].

@@ -34,7 +34,8 @@ public final class VmExceptionRenderer {
   private static final Ansi.Color errorColor = Color.RED;
 
   /**
-   * Constructs an error renderer with the given stack trace renderer. If stack trace renderer is
+   * Constructs an error renderer with the given stack trace renderer. If stack
+   * trace renderer is
    * {@code null}, stack traces will not be included in error output.
    */
   public VmExceptionRenderer(@Nullable StackTraceRenderer stackTraceRenderer) {
@@ -56,15 +57,18 @@ public final class VmExceptionRenderer {
     }
   }
 
-  private void renderBugException(VmBugException exception, StringBuilder builder) {
+  private void renderBugException(VmBugException exception,
+                                  StringBuilder builder) {
     // if a cause exists, it's more useful to report just that
-    var exceptionToReport = exception.getCause() != null ? exception.getCause() : exception;
+    var exceptionToReport =
+        exception.getCause() != null ? exception.getCause() : exception;
 
     builder
-        .append("An unexpected error has occurred. Would you mind filing a bug report?\n")
+        .append("An unexpected error has occurred. Would you mind filing a " +
+                "bug report?\n")
         .append("Cmd+Double-click the link below to open an issue.\n")
-        .append(
-            "Please copy and paste the entire error output into the issue's description, provided you can share it.\n\n")
+        .append("Please copy and paste the entire error output into the " +
+                "issue's description, provided you can share it.\n\n")
         .append("https://github.com/apple/pkl/issues/new\n\n");
 
     builder.append(
@@ -75,7 +79,8 @@ public final class VmExceptionRenderer {
     renderException(exception, builder);
     builder.append('\n').append(Release.current().versionInfo()).append("\n\n");
 
-    exceptionToReport.printStackTrace(new PrintWriter(new StringBuilderWriter(builder)));
+    exceptionToReport.printStackTrace(
+        new PrintWriter(new StringBuilderWriter(builder)));
   }
 
   private void renderException(VmException exception, StringBuilder builder) {
@@ -85,8 +90,8 @@ public final class VmExceptionRenderer {
     String message;
     var hint = exception.getHint();
     if (exception.isExternalMessage()) {
-      var totalMessage =
-          ErrorMessages.create(exception.getMessage(), exception.getMessageArguments());
+      var totalMessage = ErrorMessages.create(exception.getMessage(),
+                                              exception.getMessageArguments());
       // first paragraph is message, remainder is hint
       var index = totalMessage.indexOf("\n\n");
       if (index != -1) {
@@ -95,8 +100,10 @@ public final class VmExceptionRenderer {
       } else {
         message = totalMessage;
       }
-    } else if (exception.getMessage() != null && exception.getMessageArguments().length != 0) {
-      message = String.format(exception.getMessage(), exception.getMessageArguments());
+    } else if (exception.getMessage() != null &&
+               exception.getMessageArguments().length != 0) {
+      message = String.format(exception.getMessage(),
+                              exception.getMessageArguments());
     } else {
       message = exception.getMessage();
     }
@@ -109,20 +116,23 @@ public final class VmExceptionRenderer {
       var causeMessage = cause.getMessage();
       // null for Truffle's LazyStackTrace
       if (causeMessage != null && !causeMessage.equals(message)) {
-        builder
-            .append(cause.getClass().getSimpleName())
+        builder.append(cause.getClass().getSimpleName())
             .append(": ")
             .append(causeMessage)
             .append('\n');
       }
     }
 
-    var maxNameLength =
-        exception.getProgramValues().stream().mapToInt(v -> v.name.length()).max().orElse(0);
+    var maxNameLength = exception.getProgramValues()
+                            .stream()
+                            .mapToInt(v -> v.name.length())
+                            .max()
+                            .orElse(0);
 
     for (var value : exception.getProgramValues()) {
       builder.append(value.name);
-      builder.append(" ".repeat(Math.max(0, maxNameLength - value.name.length())));
+      builder.append(
+          " ".repeat(Math.max(0, maxNameLength - value.name.length())));
       builder.append(": ");
       builder.append(value);
       builder.append('\n');

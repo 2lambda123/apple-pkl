@@ -84,8 +84,8 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   private final SymbolTable symbolTable;
   private final boolean isMethodReturnTypeChecked;
 
-  public AstBuilder(
-      Source source, VmLanguage language, ModuleInfo moduleInfo, ModuleResolver moduleResolver) {
+  public AstBuilder(Source source, VmLanguage language, ModuleInfo moduleInfo,
+                    ModuleResolver moduleResolver) {
     super(source);
     this.language = language;
     this.moduleInfo = moduleInfo;
@@ -99,47 +99,37 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     isMethodReturnTypeChecked = !isStdLibModule || IoUtils.isTestMode();
   }
 
-  public static AstBuilder create(
-      Source source,
-      VmLanguage language,
-      ModuleContext ctx,
-      ModuleKey moduleKey,
-      ResolvedModuleKey resolvedModuleKey,
-      ModuleResolver moduleResolver) {
+  public static AstBuilder create(Source source, VmLanguage language,
+                                  ModuleContext ctx, ModuleKey moduleKey,
+                                  ResolvedModuleKey resolvedModuleKey,
+                                  ModuleResolver moduleResolver) {
     var moduleDecl = ctx.moduleDecl();
     var moduleHeader = moduleDecl != null ? moduleDecl.moduleHeader() : null;
     var sourceSection = createSourceSection(source, ctx);
     var headerSection =
-        moduleHeader != null
-            ? createSourceSection(source, moduleHeader)
-            :
-            // no explicit module declaration; designate start of file as header section
+        moduleHeader != null ? createSourceSection(source, moduleHeader) :
+                             // no explicit module declaration; designate start
+                             // of file as header section
             source.createSection(0, 0);
-    var docComment = moduleDecl != null ? createSourceSection(source, moduleDecl.t) : null;
+    var docComment =
+        moduleDecl != null ? createSourceSection(source, moduleDecl.t) : null;
 
     ModuleInfo moduleInfo;
     if (moduleDecl == null) {
       var moduleName = IoUtils.inferModuleName(moduleKey);
       moduleInfo =
-          new ModuleInfo(
-              sourceSection, headerSection, null, moduleName, moduleKey, resolvedModuleKey, false);
+          new ModuleInfo(sourceSection, headerSection, null, moduleName,
+                         moduleKey, resolvedModuleKey, false);
     } else {
       var declaredModuleName = moduleDecl.moduleHeader().qualifiedIdentifier();
-      var moduleName =
-          declaredModuleName != null
-              ? declaredModuleName.getText()
-              : IoUtils.inferModuleName(moduleKey);
+      var moduleName = declaredModuleName != null
+                           ? declaredModuleName.getText()
+                           : IoUtils.inferModuleName(moduleKey);
       var clause = moduleDecl.moduleHeader().moduleExtendsOrAmendsClause();
       var isAmend = clause != null && clause.t.getType() == PklLexer.AMENDS;
       moduleInfo =
-          new ModuleInfo(
-              sourceSection,
-              headerSection,
-              docComment,
-              moduleName,
-              moduleKey,
-              resolvedModuleKey,
-              isAmend);
+          new ModuleInfo(sourceSection, headerSection, docComment, moduleName,
+                         moduleKey, resolvedModuleKey, isAmend);
     }
 
     return new AstBuilder(source, language, moduleInfo, moduleResolver);
@@ -150,8 +140,9 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var moduleDecl = ctx.moduleDecl();
     var moduleHeader = moduleDecl != null ? moduleDecl.moduleHeader() : null;
 
-    var annotationNodes =
-        moduleDecl != null ? doVisitAnnotations(moduleDecl.annotation()) : new ExpressionNode[] {};
+    var annotationNodes = moduleDecl != null
+                              ? doVisitAnnotations(moduleDecl.annotation())
+                              : new ExpressionNode[] {};
 
     int modifiers;
     if (moduleHeader == null) {
@@ -159,77 +150,65 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     } else {
       var modifierCtxs = moduleHeader.modifier();
       modifiers =
-          doVisitModifiers(
-              modifierCtxs, VmModifier.VALID_MODULE_MODIFIERS, "invalidModuleModifier");
+          doVisitModifiers(modifierCtxs, VmModifier.VALID_MODULE_MODIFIERS,
+                           "invalidModuleModifier");
       // doing this in a second step gives better error messages
       if (moduleInfo.isAmend()) {
-        modifiers =
-            doVisitModifiers(
-                modifierCtxs,
-                VmModifier.VALID_AMENDING_MODULE_MODIFIERS,
-                "invalidAmendingModuleModifier");
+        modifiers = doVisitModifiers(modifierCtxs,
+                                     VmModifier.VALID_AMENDING_MODULE_MODIFIERS,
+                                     "invalidAmendingModuleModifier");
       }
     }
 
-    var extendsOrAmendsClause =
-        moduleHeader != null ? moduleHeader.moduleExtendsOrAmendsClause() : null;
+    var extendsOrAmendsClause = moduleHeader != null
+                                    ? moduleHeader.moduleExtendsOrAmendsClause()
+                                    : null;
 
     var supermoduleNode =
         extendsOrAmendsClause == null
-            ? resolveBaseModuleClass(Identifier.MODULE, BaseModule::getModuleClass)
-            : doVisitImport(
-                PklLexer.IMPORT, extendsOrAmendsClause, extendsOrAmendsClause.stringConstant());
+            ? resolveBaseModuleClass(Identifier.MODULE,
+                                     BaseModule::getModuleClass)
+            : doVisitImport(PklLexer.IMPORT, extendsOrAmendsClause,
+                            extendsOrAmendsClause.stringConstant());
 
-    var propertyNames =
-        CollectionUtils.<String>newHashSet(
-            ctx.is.size() + ctx.cs.size() + ctx.ts.size() + ctx.ps.size());
+    var propertyNames = CollectionUtils.<String>newHashSet(
+        ctx.is.size() + ctx.cs.size() + ctx.ts.size() + ctx.ps.size());
 
     if (!moduleInfo.isAmend()) {
-      var supertypeNode =
-          new UnresolvedTypeNode.Declared(supermoduleNode.getSourceSection(), supermoduleNode);
-      var moduleProperties =
-          doVisitModuleProperties(ctx.is, ctx.cs, ctx.ts, List.of(), propertyNames, moduleInfo);
-      var unresolvedPropertyNodes = doVisitClassProperties(ctx.ps, propertyNames);
+      var supertypeNode = new UnresolvedTypeNode.Declared(
+          supermoduleNode.getSourceSection(), supermoduleNode);
+      var moduleProperties = doVisitModuleProperties(
+          ctx.is, ctx.cs, ctx.ts, List.of(), propertyNames, moduleInfo);
+      var unresolvedPropertyNodes =
+          doVisitClassProperties(ctx.ps, propertyNames);
 
-      var classNode =
-          new ClassNode(
-              moduleInfo.getSourceSection(),
-              moduleInfo.getHeaderSection(),
-              moduleInfo.getDocComment(),
-              annotationNodes,
-              modifiers,
-              PClassInfo.forModuleClass(
-                  moduleInfo.getModuleName(), moduleInfo.getModuleKey().getUri()),
-              List.of(),
-              moduleInfo,
-              supertypeNode,
-              moduleProperties,
-              unresolvedPropertyNodes,
-              doVisitMethodDefs(ctx.ms));
+      var classNode = new ClassNode(
+          moduleInfo.getSourceSection(), moduleInfo.getHeaderSection(),
+          moduleInfo.getDocComment(), annotationNodes, modifiers,
+          PClassInfo.forModuleClass(moduleInfo.getModuleName(),
+                                    moduleInfo.getModuleKey().getUri()),
+          List.of(), moduleInfo, supertypeNode, moduleProperties,
+          unresolvedPropertyNodes, doVisitMethodDefs(ctx.ms));
 
-      return new ModuleNode(
-          language, moduleInfo.getSourceSection(), moduleInfo.getModuleName(), classNode);
+      return new ModuleNode(language, moduleInfo.getSourceSection(),
+                            moduleInfo.getModuleName(), classNode);
     }
 
-    var moduleProperties =
-        doVisitModuleProperties(ctx.is, ctx.cs, ctx.ts, ctx.ps, propertyNames, moduleInfo);
+    var moduleProperties = doVisitModuleProperties(
+        ctx.is, ctx.cs, ctx.ts, ctx.ps, propertyNames, moduleInfo);
 
     for (var methodCtx : ctx.ms) {
-      var localMethod = doVisitObjectMethod(methodCtx.methodHeader(), methodCtx.expr(), true);
+      var localMethod =
+          doVisitObjectMethod(methodCtx.methodHeader(), methodCtx.expr(), true);
       EconomicMaps.put(moduleProperties, localMethod.getName(), localMethod);
     }
 
-    var moduleNode =
-        AmendModuleNodeGen.create(
-            moduleInfo.getSourceSection(),
-            language,
-            annotationNodes,
-            moduleProperties,
-            moduleInfo,
-            supermoduleNode);
+    var moduleNode = AmendModuleNodeGen.create(
+        moduleInfo.getSourceSection(), language, annotationNodes,
+        moduleProperties, moduleInfo, supermoduleNode);
 
-    return new ModuleNode(
-        language, moduleInfo.getSourceSection(), moduleInfo.getModuleName(), moduleNode);
+    return new ModuleNode(language, moduleInfo.getSourceSection(),
+                          moduleInfo.getModuleName(), moduleNode);
   }
 
   @Override
@@ -246,81 +225,70 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     var typeParameters = visitTypeParameterList(headerCtx.typeParameterList());
 
-    List<ClassPropertyContext> propertyCtxs = bodyCtx == null ? List.of() : bodyCtx.ps;
-    List<ClassMethodContext> methodCtxs = bodyCtx == null ? List.of() : bodyCtx.ms;
+    List<ClassPropertyContext> propertyCtxs =
+        bodyCtx == null ? List.of() : bodyCtx.ps;
+    List<ClassMethodContext> methodCtxs =
+        bodyCtx == null ? List.of() : bodyCtx.ms;
 
     var modifiers =
-        doVisitModifiers(
-                headerCtx.modifier(), VmModifier.VALID_CLASS_MODIFIERS, "invalidClassModifier")
-            | VmModifier.CLASS;
+        doVisitModifiers(headerCtx.modifier(), VmModifier.VALID_CLASS_MODIFIERS,
+                         "invalidClassModifier") |
+        VmModifier.CLASS;
 
-    var className =
-        Identifier.property(headerCtx.Identifier().getText(), VmModifier.isLocal(modifiers));
+    var className = Identifier.property(headerCtx.Identifier().getText(),
+                                        VmModifier.isLocal(modifiers));
 
-    return symbolTable.enterClass(
-        className,
-        typeParameters,
-        scope -> {
-          var supertypeCtx = headerCtx.type();
+    return symbolTable.enterClass(className, typeParameters, scope -> {
+      var supertypeCtx = headerCtx.type();
 
-          // needs to be inside `enterClass` so that class' type parameters are in scope
-          var supertypeNode =
-              supertypeCtx != null
-                  ? visitType(supertypeCtx)
-                  : isBaseModule && className == Identifier.ANY
-                      ? null
-                      : new UnresolvedTypeNode.Declared(
-                          VmUtils.unavailableSourceSection(),
-                          resolveBaseModuleClass(Identifier.TYPED, BaseModule::getTypedClass));
+      // needs to be inside `enterClass` so that class' type parameters are in
+      // scope
+      var supertypeNode =
+          supertypeCtx != null ? visitType(supertypeCtx)
+          : isBaseModule && className == Identifier.ANY
+              ? null
+              : new UnresolvedTypeNode.Declared(
+                    VmUtils.unavailableSourceSection(),
+                    resolveBaseModuleClass(Identifier.TYPED,
+                                           BaseModule::getTypedClass));
 
-          if (!(supertypeNode == null
-              || supertypeNode instanceof UnresolvedTypeNode.Declared
-              || supertypeNode instanceof UnresolvedTypeNode.Parameterized
-              || supertypeNode instanceof UnresolvedTypeNode.Module)) {
-            throw exceptionBuilder()
-                .evalError("invalidSupertype", supertypeNode.getSourceSection().getCharacters())
-                .withSourceSection(supertypeNode.getSourceSection())
-                .build();
-          }
+      if (!(supertypeNode == null ||
+            supertypeNode instanceof UnresolvedTypeNode.Declared ||
+            supertypeNode instanceof UnresolvedTypeNode.Parameterized ||
+            supertypeNode instanceof UnresolvedTypeNode.Module)) {
+        throw exceptionBuilder()
+            .evalError("invalidSupertype",
+                       supertypeNode.getSourceSection().getCharacters())
+            .withSourceSection(supertypeNode.getSourceSection())
+            .build();
+      }
 
-          var classInfo =
-              PClassInfo.get(
-                  moduleInfo.getModuleName(),
-                  className.toString(),
-                  moduleInfo.getModuleKey().getUri());
-          var propertyNames = CollectionUtils.<String>newHashSet(propertyCtxs.size());
+      var classInfo =
+          PClassInfo.get(moduleInfo.getModuleName(), className.toString(),
+                         moduleInfo.getModuleKey().getUri());
+      var propertyNames =
+          CollectionUtils.<String>newHashSet(propertyCtxs.size());
 
-          var classNode =
-              new ClassNode(
-                  sourceSection,
-                  headerSection,
-                  createSourceSection(ctx.t),
-                  doVisitAnnotations(ctx.annotation()),
-                  modifiers,
-                  classInfo,
-                  typeParameters,
-                  null,
-                  supertypeNode,
-                  EconomicMaps.create(),
-                  doVisitClassProperties(propertyCtxs, propertyNames),
-                  doVisitMethodDefs(methodCtxs));
+      var classNode = new ClassNode(
+          sourceSection, headerSection, createSourceSection(ctx.t),
+          doVisitAnnotations(ctx.annotation()), modifiers, classInfo,
+          typeParameters, null, supertypeNode, EconomicMaps.create(),
+          doVisitClassProperties(propertyCtxs, propertyNames),
+          doVisitMethodDefs(methodCtxs));
 
-          var isLocal = VmModifier.isLocal(modifiers);
+      var isLocal = VmModifier.isLocal(modifiers);
 
-          var result =
-              new ObjectMember(
-                  sourceSection,
-                  headerSection,
-                  isLocal ? VmModifier.LOCAL_CLASS_OBJECT_MEMBER : VmModifier.CLASS_OBJECT_MEMBER,
-                  scope.getName(),
-                  scope.getQualifiedName());
+      var result =
+          new ObjectMember(sourceSection, headerSection,
+                           isLocal ? VmModifier.LOCAL_CLASS_OBJECT_MEMBER
+                                   : VmModifier.CLASS_OBJECT_MEMBER,
+                           scope.getName(), scope.getQualifiedName());
 
-          result.initMemberNode(
-              new UntypedObjectMemberNode(
-                  language, scope.buildFrameDescriptor(), result, classNode));
+      result.initMemberNode(new UntypedObjectMemberNode(
+          language, scope.buildFrameDescriptor(), result, classNode));
 
-          return result;
-        });
+      return result;
+    });
   }
 
   @Override
@@ -329,70 +297,58 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var sourceSection = createSourceSection(ctx);
     var headerSection = createSourceSection(headerCtx);
 
-    var modifiers =
-        doVisitModifiers(
-                headerCtx.modifier(),
-                VmModifier.VALID_TYPE_ALIAS_MODIFIERS,
-                "invalidTypeAliasModifier")
-            | VmModifier.TYPE_ALIAS;
+    var modifiers = doVisitModifiers(headerCtx.modifier(),
+                                     VmModifier.VALID_TYPE_ALIAS_MODIFIERS,
+                                     "invalidTypeAliasModifier") |
+                    VmModifier.TYPE_ALIAS;
 
     var isLocal = VmModifier.isLocal(modifiers);
     var name = Identifier.property(headerCtx.Identifier().getText(), isLocal);
 
     var typeParameters = visitTypeParameterList(headerCtx.typeParameterList());
 
-    return symbolTable.enterTypeAlias(
-        name,
-        typeParameters,
-        scope -> {
-          var scopeName = scope.getName();
-          var typeAliasNode =
-              new TypeAliasNode(
-                  sourceSection,
-                  headerSection,
-                  createSourceSection(ctx.t),
-                  doVisitAnnotations(ctx.annotation()),
-                  modifiers,
-                  scopeName.toString(),
-                  scope.getQualifiedName(),
-                  typeParameters,
-                  (UnresolvedTypeNode) ctx.type().accept(this));
+    return symbolTable.enterTypeAlias(name, typeParameters, scope -> {
+      var scopeName = scope.getName();
+      var typeAliasNode = new TypeAliasNode(
+          sourceSection, headerSection, createSourceSection(ctx.t),
+          doVisitAnnotations(ctx.annotation()), modifiers, scopeName.toString(),
+          scope.getQualifiedName(), typeParameters,
+          (UnresolvedTypeNode)ctx.type().accept(this));
 
-          var result =
-              new ObjectMember(
-                  sourceSection,
-                  headerSection,
-                  isLocal
-                      ? VmModifier.LOCAL_TYPEALIAS_OBJECT_MEMBER
-                      : VmModifier.TYPEALIAS_OBJECT_MEMBER,
-                  scopeName,
-                  scope.getQualifiedName());
+      var result =
+          new ObjectMember(sourceSection, headerSection,
+                           isLocal ? VmModifier.LOCAL_TYPEALIAS_OBJECT_MEMBER
+                                   : VmModifier.TYPEALIAS_OBJECT_MEMBER,
+                           scopeName, scope.getQualifiedName());
 
-          result.initMemberNode(
-              new UntypedObjectMemberNode(
-                  language, scope.buildFrameDescriptor(), result, typeAliasNode));
+      result.initMemberNode(new UntypedObjectMemberNode(
+          language, scope.buildFrameDescriptor(), result, typeAliasNode));
 
-          return result;
-        });
+      return result;
+    });
   }
 
   @Override
-  public UnresolvedTypeNode[] visitTypeArgumentList(@Nullable TypeArgumentListContext ctx) {
-    if (ctx == null) return new UnresolvedTypeNode[0];
+  public UnresolvedTypeNode[]
+  visitTypeArgumentList(@Nullable TypeArgumentListContext ctx) {
+    if (ctx == null)
+      return new UnresolvedTypeNode[0];
 
     checkCommaSeparatedElements(ctx, ctx.ts, ctx.errs);
     checkClosingDelimiter(ctx.err, ">", ctx.stop);
 
     var result = new UnresolvedTypeNode[ctx.ts.size()];
     for (int i = 0; i < ctx.ts.size(); i++) {
-      result[i] = (UnresolvedTypeNode) ctx.ts.get(i).accept(this);
+      result[i] = (UnresolvedTypeNode)ctx.ts.get(i).accept(this);
     }
     return result;
   }
 
   @Override
-  public List<TypeParameter> visitTypeParameterList(@Nullable TypeParameterListContext ctx) {
-    if (ctx == null) return List.of();
+  public List<TypeParameter>
+  visitTypeParameterList(@Nullable TypeParameterListContext ctx) {
+    if (ctx == null)
+      return List.of();
 
     checkCommaSeparatedElements(ctx, ctx.ts, ctx.errs);
     checkClosingDelimiter(ctx.err, ">", ctx.stop);
@@ -430,24 +386,24 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   }
 
   @Override
-  public @Nullable UnresolvedTypeNode visitTypeAnnotation(@Nullable TypeAnnotationContext ctx) {
-    return ctx == null ? null : (UnresolvedTypeNode) ctx.type().accept(this);
+  public @Nullable
+  UnresolvedTypeNode visitTypeAnnotation(@Nullable TypeAnnotationContext ctx) {
+    return ctx == null ? null : (UnresolvedTypeNode)ctx.type().accept(this);
   }
 
   @Override
   public Object visitNewExpr(NewExprContext ctx) {
     var typeCtx = ctx.type();
-    return typeCtx != null
-        ? doVisitNewExprWithExplicitParent(ctx, typeCtx)
-        : doVisitNewExprWithInferredParent(ctx);
+    return typeCtx != null ? doVisitNewExprWithExplicitParent(ctx, typeCtx)
+                           : doVisitNewExprWithInferredParent(ctx);
   }
 
-  private Object doVisitNewExprWithExplicitParent(NewExprContext ctx, TypeContext typeCtx) {
+  private Object doVisitNewExprWithExplicitParent(NewExprContext ctx,
+                                                  TypeContext typeCtx) {
     return doVisitObjectBody(
         ctx.objectBody(),
         new GetParentForTypeNode(
-            createSourceSection(ctx),
-            visitType(typeCtx),
+            createSourceSection(ctx), visitType(typeCtx),
             symbolTable.getCurrentScope().getQualifiedName()));
   }
 
@@ -459,9 +415,9 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var scope = symbolTable.getCurrentScope();
     var levelsUp = 0;
 
-    while (parent instanceof IfExprContext
-        || parent instanceof TraceExprContext
-        || parent instanceof LetExprContext letExpr && letExpr.r == child) {
+    while (parent instanceof IfExprContext ||
+           parent instanceof TraceExprContext ||
+           parent instanceof LetExprContext letExpr && letExpr.r == child) {
 
       if (parent instanceof LetExprContext) {
         assert scope != null;
@@ -474,41 +430,40 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     assert scope != null;
 
-    if (parent instanceof ClassPropertyContext || parent instanceof ObjectPropertyContext) {
-      inferredParentNode =
-          InferParentWithinPropertyNodeGen.create(
-              createSourceSection(ctx.t),
-              scope.getName(),
-              levelsUp == 0 ? new GetOwnerNode() : new GetEnclosingOwnerNode(levelsUp));
-    } else if (parent instanceof ObjectElementContext
-        || parent instanceof ObjectEntryContext objectEntry && objectEntry.v == child) {
-      inferredParentNode =
-          ApplyVmFunction1NodeGen.create(
-              ReadPropertyNodeGen.create(
-                  createSourceSection(ctx.t),
-                  Identifier.DEFAULT,
-                  levelsUp == 0 ? new GetReceiverNode() : new GetEnclosingReceiverNode(levelsUp)),
-              new GetMemberKeyNode());
-    } else if (parent instanceof ClassMethodContext || parent instanceof ObjectMethodContext) {
+    if (parent instanceof ClassPropertyContext || parent instanceof
+                                                      ObjectPropertyContext) {
+      inferredParentNode = InferParentWithinPropertyNodeGen.create(
+          createSourceSection(ctx.t), scope.getName(),
+          levelsUp == 0 ? new GetOwnerNode()
+                        : new GetEnclosingOwnerNode(levelsUp));
+    } else if (parent instanceof ObjectElementContext ||
+               parent instanceof ObjectEntryContext objectEntry &&
+                   objectEntry.v == child) {
+      inferredParentNode = ApplyVmFunction1NodeGen.create(
+          ReadPropertyNodeGen.create(
+              createSourceSection(ctx.t), Identifier.DEFAULT,
+              levelsUp == 0 ? new GetReceiverNode()
+                            : new GetEnclosingReceiverNode(levelsUp)),
+          new GetMemberKeyNode());
+    } else if (parent instanceof ClassMethodContext ||
+               parent instanceof ObjectMethodContext) {
       var isObjectMethod =
-          parent instanceof ObjectMethodContext
-              || parent.getParent() instanceof ModuleContext && moduleInfo.isAmend();
+          parent instanceof ObjectMethodContext ||
+          parent.getParent() instanceof ModuleContext && moduleInfo.isAmend();
       Identifier scopeName = scope.getName();
       inferredParentNode =
           isObjectMethod
               ? new InferParentWithinObjectMethodNode(
-                  createSourceSection(ctx.t),
-                  language,
-                  scopeName,
-                  levelsUp == 0 ? new GetOwnerNode() : new GetEnclosingOwnerNode(levelsUp))
+                    createSourceSection(ctx.t), language, scopeName,
+                    levelsUp == 0 ? new GetOwnerNode()
+                                  : new GetEnclosingOwnerNode(levelsUp))
               : new InferParentWithinMethodNode(
-                  createSourceSection(ctx.t),
-                  language,
-                  scopeName,
-                  levelsUp == 0 ? new GetOwnerNode() : new GetEnclosingOwnerNode(levelsUp));
+                    createSourceSection(ctx.t), language, scopeName,
+                    levelsUp == 0 ? new GetOwnerNode()
+                                  : new GetEnclosingOwnerNode(levelsUp));
     } else if (parent instanceof LetExprContext letExpr && letExpr.l == child) {
-      // TODO (unclear how to infer type now that let-expression is implemented as lambda
-      // invocation)
+      // TODO (unclear how to infer type now that let-expression is implemented
+      // as lambda invocation)
       throw exceptionBuilder()
           .evalError("cannotInferParent")
           .withSourceSection(createSourceSection(ctx.t))
@@ -527,11 +482,12 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   public Object visitAmendExpr(AmendExprContext ctx) {
     var parentExpr = ctx.expr();
 
-    if (!(parentExpr instanceof NewExprContext
-        || parentExpr instanceof AmendExprContext
-        || parentExpr instanceof ParenthesizedExprContext)) {
+    if (!(parentExpr instanceof NewExprContext ||
+          parentExpr instanceof AmendExprContext ||
+          parentExpr instanceof ParenthesizedExprContext)) {
       throw exceptionBuilder()
-          .evalError("unexpectedCurlyProbablyAmendsExpression", parentExpr.getText())
+          .evalError("unexpectedCurlyProbablyAmendsExpression",
+                     parentExpr.getText())
           .withSourceSection(createSourceSection(ctx.objectBody().start))
           .build();
     }
@@ -548,22 +504,19 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var typeAnnCtx = ctx.typeAnnotation();
     var sourceSection = createSourceSection(ctx);
     var identifierSymbol = identifier.getSymbol();
-    var headerSection =
-        createSourceSection(
-            !modifierCtxs.isEmpty() ? modifierCtxs.get(0).start : identifierSymbol,
-            typeAnnCtx != null ? typeAnnCtx.getStop() : identifierSymbol);
+    var headerSection = createSourceSection(
+        !modifierCtxs.isEmpty() ? modifierCtxs.get(0).start : identifierSymbol,
+        typeAnnCtx != null ? typeAnnCtx.getStop() : identifierSymbol);
 
     var modifiers =
-        doVisitModifiers(
-            ctx.modifier(), VmModifier.VALID_PROPERTY_MODIFIERS, "invalidPropertyModifier");
+        doVisitModifiers(ctx.modifier(), VmModifier.VALID_PROPERTY_MODIFIERS,
+                         "invalidPropertyModifier");
 
     var isLocal = VmModifier.isLocal(modifiers);
     var propertyName = Identifier.property(identifier.getText(), isLocal);
 
     return symbolTable.enterProperty(
-        propertyName,
-        getConstLevel(modifiers),
-        scope -> {
+        propertyName, getConstLevel(modifiers), scope -> {
           var exprCtx = ctx.expr();
           var objBodyCtx = ctx.objectBody();
           ExpressionNode bodyNode;
@@ -582,58 +535,50 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
                   .build();
             }
             bodyNode = visitExpr(exprCtx);
-          } else if (objBodyCtx != null && !objBodyCtx.isEmpty()) { // prop { ... }
+          } else if (objBodyCtx != null &&
+                     !objBodyCtx.isEmpty()) { // prop { ... }
             if (typeAnnCtx != null) {
               throw exceptionBuilder()
                   .evalError("cannotAmendPropertyDefinition")
                   .withSourceSection(createSourceSection(ctx))
                   .build();
             }
-            bodyNode =
-                doVisitObjectBody(
-                    objBodyCtx,
-                    new ReadSuperPropertyNode(
-                        unavailableSourceSection(),
-                        scope.getName(),
-                        scope.getConstLevel() == ConstLevel.ALL));
+            bodyNode = doVisitObjectBody(
+                objBodyCtx, new ReadSuperPropertyNode(
+                                unavailableSourceSection(), scope.getName(),
+                                scope.getConstLevel() == ConstLevel.ALL));
           } else { // no value given
             if (isLocal) {
               assert typeAnnCtx != null;
               throw missingLocalPropertyValue(typeAnnCtx);
             }
             if (VmModifier.isExternal(modifiers)) {
-              bodyNode =
-                  externalMemberRegistry.getPropertyBody(scope.getQualifiedName(), headerSection);
+              bodyNode = externalMemberRegistry.getPropertyBody(
+                  scope.getQualifiedName(), headerSection);
               if (bodyNode instanceof LanguageAwareNode languageAwareNode) {
                 languageAwareNode.initLanguage(language);
               }
             } else if (VmModifier.isAbstract(modifiers)) {
-              bodyNode =
-                  new CannotInvokeAbstractPropertyNode(headerSection, scope.getQualifiedName());
+              bodyNode = new CannotInvokeAbstractPropertyNode(
+                  headerSection, scope.getQualifiedName());
             } else {
-              bodyNode = null; // will be given a default by UnresolvedPropertyNode
+              bodyNode =
+                  null; // will be given a default by UnresolvedPropertyNode
             }
           }
 
           var typeAnnNode = visitTypeAnnotation(typeAnnCtx);
 
           return new UnresolvedPropertyNode(
-              language,
-              sourceSection,
-              headerSection,
-              createSourceSection(identifier),
-              scope.buildFrameDescriptor(),
-              docComment,
-              annotationNodes,
-              modifiers,
-              scope.getName(),
-              scope.getQualifiedName(),
-              typeAnnNode,
-              bodyNode);
+              language, sourceSection, headerSection,
+              createSourceSection(identifier), scope.buildFrameDescriptor(),
+              docComment, annotationNodes, modifiers, scope.getName(),
+              scope.getQualifiedName(), typeAnnNode, bodyNode);
         });
   }
 
-  private VmException missingLocalPropertyValue(TypeAnnotationContext typeAnnCtx) {
+  private VmException
+  missingLocalPropertyValue(TypeAnnotationContext typeAnnCtx) {
     var stop = typeAnnCtx.stop.getStopIndex();
     return exceptionBuilder()
         .evalError("missingLocalPropertyValue")
@@ -642,25 +587,26 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   }
 
   private ObjectMember doVisitObjectProperty(ObjectPropertyContext ctx) {
-    return doVisitObjectProperty(
-        ctx, ctx.modifier(), ctx.Identifier(), ctx.typeAnnotation(), ctx.expr(), ctx.objectBody());
+    return doVisitObjectProperty(ctx, ctx.modifier(), ctx.Identifier(),
+                                 ctx.typeAnnotation(), ctx.expr(),
+                                 ctx.objectBody());
   }
 
   private ObjectMember doVisitObjectMethod(ObjectMethodContext ctx) {
     return doVisitObjectMethod(ctx.methodHeader(), ctx.expr(), false);
   }
 
-  private ObjectMember doVisitObjectMethod(
-      MethodHeaderContext headerCtx, ExprContext exprCtx, boolean isModuleMethod) {
-    var modifiers =
-        doVisitModifiers(
-            headerCtx.modifier(),
-            VmModifier.VALID_OBJECT_MEMBER_MODIFIERS,
-            "invalidObjectMemberModifier");
+  private ObjectMember doVisitObjectMethod(MethodHeaderContext headerCtx,
+                                           ExprContext exprCtx,
+                                           boolean isModuleMethod) {
+    var modifiers = doVisitModifiers(headerCtx.modifier(),
+                                     VmModifier.VALID_OBJECT_MEMBER_MODIFIERS,
+                                     "invalidObjectMemberModifier");
 
     if (!VmModifier.isLocal(modifiers)) {
       throw exceptionBuilder()
-          .evalError(isModuleMethod ? "moduleMethodMustBeLocal" : "objectMethodMustBeLocal")
+          .evalError(isModuleMethod ? "moduleMethodMustBeLocal"
+                                    : "objectMethodMustBeLocal")
           .withSourceSection(createSourceSection(headerCtx))
           .build();
     }
@@ -671,35 +617,25 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var frameDescriptorBuilder = createFrameDescriptorBuilder(paramListCtx);
 
     return symbolTable.enterMethod(
-        methodName,
-        getConstLevel(modifiers),
-        frameDescriptorBuilder,
-        List.of(),
+        methodName, getConstLevel(modifiers), frameDescriptorBuilder, List.of(),
         scope -> {
           if (headerCtx.typeParameterList() != null) {
             throw exceptionBuilder()
                 .evalError("cannotDeclareTypeParameter")
-                .withSourceSection(createSourceSection(headerCtx.typeParameterList()))
+                .withSourceSection(
+                    createSourceSection(headerCtx.typeParameterList()))
                 .build();
           }
 
           var member =
-              new ObjectMember(
-                  createSourceSection(headerCtx.getParent()),
-                  createSourceSection(headerCtx),
-                  modifiers,
-                  scope.getName(),
-                  scope.getQualifiedName());
+              new ObjectMember(createSourceSection(headerCtx.getParent()),
+                               createSourceSection(headerCtx), modifiers,
+                               scope.getName(), scope.getQualifiedName());
           var body = visitExpr(exprCtx);
-          var node =
-              new ObjectMethodNode(
-                  language,
-                  scope.buildFrameDescriptor(),
-                  member,
-                  body,
-                  paramListCtx.ts.size(),
-                  doVisitParameterTypes(paramListCtx),
-                  visitTypeAnnotation(headerCtx.typeAnnotation()));
+          var node = new ObjectMethodNode(
+              language, scope.buildFrameDescriptor(), member, body,
+              paramListCtx.ts.size(), doVisitParameterTypes(paramListCtx),
+              visitTypeAnnotation(headerCtx.typeAnnotation()));
 
           member.initMemberNode(node);
           return member;
@@ -707,30 +643,21 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   }
 
   private ObjectMember doVisitObjectProperty(
-      ParserRuleContext ctx,
-      List<? extends ModifierContext> modifierCtxs,
-      TerminalNode propertyName,
-      @Nullable TypeAnnotationContext typeAnnCtx,
+      ParserRuleContext ctx, List<? extends ModifierContext> modifierCtxs,
+      TerminalNode propertyName, @Nullable TypeAnnotationContext typeAnnCtx,
       @Nullable ExprContext exprCtx,
       @Nullable List<? extends ObjectBodyContext> bodyCtx) {
 
     return doVisitObjectProperty(
-        createSourceSection(ctx),
-        createSourceSection(propertyName),
-        doVisitModifiers(
-            modifierCtxs, VmModifier.VALID_OBJECT_MEMBER_MODIFIERS, "invalidObjectMemberModifier"),
-        propertyName.getText(),
-        typeAnnCtx,
-        exprCtx,
-        bodyCtx);
+        createSourceSection(ctx), createSourceSection(propertyName),
+        doVisitModifiers(modifierCtxs, VmModifier.VALID_OBJECT_MEMBER_MODIFIERS,
+                         "invalidObjectMemberModifier"),
+        propertyName.getText(), typeAnnCtx, exprCtx, bodyCtx);
   }
 
   private ObjectMember doVisitObjectProperty(
-      SourceSection sourceSection,
-      SourceSection headerSection,
-      int modifiers,
-      String propertyName,
-      @Nullable TypeAnnotationContext typeAnnCtx,
+      SourceSection sourceSection, SourceSection headerSection, int modifiers,
+      String propertyName, @Nullable TypeAnnotationContext typeAnnCtx,
       @Nullable ExprContext exprCtx,
       @Nullable List<? extends ObjectBodyContext> bodyCtx) {
 
@@ -738,12 +665,11 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var identifier = Identifier.property(propertyName, isLocal);
 
     return symbolTable.enterProperty(
-        identifier,
-        getConstLevel(modifiers),
-        scope -> {
+        identifier, getConstLevel(modifiers), scope -> {
           if (isLocal) {
-            if (exprCtx == null
-                && typeAnnCtx != null) { // module property that has type annotation but no value
+            if (exprCtx == null &&
+                typeAnnCtx != null) { // module property that has type
+                                      // annotation but no value
               throw missingLocalPropertyValue(typeAnnCtx);
             }
           } else {
@@ -763,18 +689,18 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
                   .withSourceSection(createSourceSection(bodyCtx.get(0).start))
                   .build();
             }
-            bodyNode =
-                doVisitObjectBody(
-                    bodyCtx,
-                    new ReadSuperPropertyNode(
-                        unavailableSourceSection(),
-                        scope.getName(),
-                        // Never need a const check for amends declarations. In `foo { ... }`:
-                        // 1. if `foo` is const (i.e. `const foo { ... }`, `super.foo` is required
-                        // to be const (the const-ness of a property cannot be changed)
-                        // 2. if in a const scope (i.e. `const bar = new { foo { ... } }`),
-                        // `super.foo` does not reference something outside the scope.
-                        false));
+            bodyNode = doVisitObjectBody(
+                bodyCtx, new ReadSuperPropertyNode(
+                             unavailableSourceSection(), scope.getName(),
+                             // Never need a const check for amends
+                             // declarations. In `foo { ... }`:
+                             // 1. if `foo` is const (i.e. `const foo { ... }`,
+                             // `super.foo` is required to be const (the
+                             // const-ness of a property cannot be changed)
+                             // 2. if in a const scope (i.e. `const bar = new {
+                             // foo { ... } }`), `super.foo` does not reference
+                             // something outside the scope.
+                             false));
           } else { // foo = ...
             assert exprCtx != null;
             bodyNode = visitExpr(exprCtx);
@@ -782,53 +708,37 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
           return isLocal
               ? VmUtils.createLocalObjectProperty(
-                  language,
-                  sourceSection,
-                  headerSection,
-                  scope.getName(),
-                  scope.getQualifiedName(),
-                  scope.buildFrameDescriptor(),
-                  modifiers,
-                  bodyNode,
-                  visitTypeAnnotation(typeAnnCtx))
+                    language, sourceSection, headerSection, scope.getName(),
+                    scope.getQualifiedName(), scope.buildFrameDescriptor(),
+                    modifiers, bodyNode, visitTypeAnnotation(typeAnnCtx))
               : VmUtils.createObjectProperty(
-                  language,
-                  sourceSection,
-                  headerSection,
-                  scope.getName(),
-                  scope.getQualifiedName(),
-                  scope.buildFrameDescriptor(),
-                  modifiers,
-                  bodyNode,
-                  null);
+                    language, sourceSection, headerSection, scope.getName(),
+                    scope.getQualifiedName(), scope.buildFrameDescriptor(),
+                    modifiers, bodyNode, null);
         });
   }
 
-  private GeneratorMemberNode[] doVisitGeneratorMemberNodes(
-      List<? extends ObjectMemberContext> memberCtxs) {
+  private GeneratorMemberNode[]
+  doVisitGeneratorMemberNodes(List<? extends ObjectMemberContext> memberCtxs) {
     var result = new GeneratorMemberNode[memberCtxs.size()];
     for (var i = 0; i < result.length; i++) {
-      result[i] = (GeneratorMemberNode) memberCtxs.get(i).accept(this);
+      result[i] = (GeneratorMemberNode)memberCtxs.get(i).accept(this);
     }
     return result;
   }
 
-  private GeneratorObjectLiteralNode doVisitGeneratorObjectBody(
-      ObjectBodyContext ctx, ExpressionNode parentNode) {
+  private GeneratorObjectLiteralNode
+  doVisitGeneratorObjectBody(ObjectBodyContext ctx, ExpressionNode parentNode) {
     var parametersDescriptor = createFrameDescriptorBuilder(ctx);
     var parameterTypes = doVisitParameterTypes(ctx);
     var memberNodes = doVisitGeneratorMemberNodes(ctx.objectMember());
     var currentScope = symbolTable.getCurrentScope();
-    //noinspection ConstantConditions
+    // noinspection ConstantConditions
     return GeneratorObjectLiteralNodeGen.create(
-        createSourceSection(ctx.getParent()),
-        language,
-        currentScope.getQualifiedName(),
-        currentScope.isCustomThisScope(),
+        createSourceSection(ctx.getParent()), language,
+        currentScope.getQualifiedName(), currentScope.isCustomThisScope(),
         parametersDescriptor == null ? null : parametersDescriptor.build(),
-        parameterTypes,
-        memberNodes,
-        parentNode);
+        parameterTypes, memberNodes, parentNode);
   }
 
   @Override
@@ -845,7 +755,8 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     return GeneratorPropertyNodeGen.create(member);
   }
 
-  private void checkHasNoForGenerator(ParserRuleContext ctx, String errorMessageKey) {
+  private void checkHasNoForGenerator(ParserRuleContext ctx,
+                                      String errorMessageKey) {
     if (symbolTable.getCurrentScope().getForGeneratorVariables().isEmpty()) {
       return;
     }
@@ -855,7 +766,8 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     }
     throw exceptionBuilder()
         .evalError(errorMessageKey)
-        .withSourceSection(createSourceSection(((ForGeneratorContext) forExprCtx).FOR()))
+        .withSourceSection(
+            createSourceSection(((ForGeneratorContext)forExprCtx).FOR()))
         .build();
   }
 
@@ -885,11 +797,14 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
         createSourceSection(ctx), visitExpr(ctx.expr()), ctx.QSPREAD() != null);
   }
 
-  private void insertWriteForGeneratorVarsToFrameSlotsNode(@Nullable MemberNode memberNode) {
-    if (memberNode == null) return; // member has constant value
+  private void
+  insertWriteForGeneratorVarsToFrameSlotsNode(@Nullable MemberNode memberNode) {
+    if (memberNode == null)
+      return; // member has constant value
 
     var descriptor = memberNode.getFrameDescriptor();
-    var forGeneratorVars = symbolTable.getCurrentScope().getForGeneratorVariables();
+    var forGeneratorVars =
+        symbolTable.getCurrentScope().getForGeneratorVariables();
     if (forGeneratorVars.isEmpty()) {
       return; // node is not within a for generator
     }
@@ -899,7 +814,8 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
       slots[i] = descriptor.findOrAddAuxiliarySlot(variable);
       i++;
     }
-    memberNode.replaceBody((bodyNode) -> new WriteForVariablesNode(slots, bodyNode));
+    memberNode.replaceBody(
+        (bodyNode) -> new WriteForVariablesNode(slots, bodyNode));
   }
 
   @Override
@@ -925,9 +841,11 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     var sourceSection = createSourceSection(ctx);
     var thenNodes = doVisitForWhenBody(ctx.b1);
-    var elseNodes = ctx.b2 == null ? new GeneratorMemberNode[0] : doVisitForWhenBody(ctx.b2);
+    var elseNodes = ctx.b2 == null ? new GeneratorMemberNode[0]
+                                   : doVisitForWhenBody(ctx.b2);
 
-    return new GeneratorWhenNode(sourceSection, visitExpr(ctx.e), thenNodes, elseNodes);
+    return new GeneratorWhenNode(sourceSection, visitExpr(ctx.e), thenNodes,
+                                 elseNodes);
   }
 
   private int pushForGeneratorVariableContext(ParameterContext ctx) {
@@ -935,7 +853,8 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var slot = currentScope.pushForGeneratorVariableContext(ctx);
     if (slot == -1) {
       throw exceptionBuilder()
-          .evalError("duplicateDefinition", ctx.typedIdentifier().Identifier().getText())
+          .evalError("duplicateDefinition",
+                     ctx.typedIdentifier().Identifier().getText())
           .withSourceSection(createSourceSection(ctx))
           .build();
     }
@@ -960,17 +879,25 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     if (ctx.t2 != null) {
       keyVariableSlot = ignoreT1 ? -1 : pushForGeneratorVariableContext(ctx.t1);
-      valueVariableSlot = ignoreT2 ? -1 : pushForGeneratorVariableContext(ctx.t2);
+      valueVariableSlot =
+          ignoreT2 ? -1 : pushForGeneratorVariableContext(ctx.t2);
       unresolvedKeyTypeNode =
-          ignoreT1 ? null : visitTypeAnnotation(ctx.t1.typedIdentifier().typeAnnotation());
+          ignoreT1
+              ? null
+              : visitTypeAnnotation(ctx.t1.typedIdentifier().typeAnnotation());
       unresolvedValueTypeNode =
-          ignoreT2 ? null : visitTypeAnnotation(ctx.t2.typedIdentifier().typeAnnotation());
+          ignoreT2
+              ? null
+              : visitTypeAnnotation(ctx.t2.typedIdentifier().typeAnnotation());
     } else {
       keyVariableSlot = -1;
-      valueVariableSlot = ignoreT1 ? -1 : pushForGeneratorVariableContext(ctx.t1);
+      valueVariableSlot =
+          ignoreT1 ? -1 : pushForGeneratorVariableContext(ctx.t1);
       unresolvedKeyTypeNode = null;
       unresolvedValueTypeNode =
-          ignoreT1 ? null : visitTypeAnnotation(ctx.t1.typedIdentifier().typeAnnotation());
+          ignoreT1
+              ? null
+              : visitTypeAnnotation(ctx.t1.typedIdentifier().typeAnnotation());
     }
 
     var iterableNode = visitExpr(ctx.e);
@@ -981,20 +908,15 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     if (valueVariableSlot != -1) {
       currentScope.popForGeneratorVariable();
     }
-    //noinspection ConstantConditions
+    // noinspection ConstantConditions
     return GeneratorForNodeGen.create(
-        sourceSection,
-        keyVariableSlot,
-        valueVariableSlot,
-        iterableNode,
-        unresolvedKeyTypeNode,
-        unresolvedValueTypeNode,
-        memberNodes,
-        ctx.t2 != null && !ignoreT1,
-        !ignoreT2);
+        sourceSection, keyVariableSlot, valueVariableSlot, iterableNode,
+        unresolvedKeyTypeNode, unresolvedValueTypeNode, memberNodes,
+        ctx.t2 != null && !ignoreT1, !ignoreT2);
   }
 
-  private void checkSpaceSeparatedObjectMembers(ObjectBodyContext objectBodyContext) {
+  private void
+  checkSpaceSeparatedObjectMembers(ObjectBodyContext objectBodyContext) {
     assert objectBodyContext.objectMember() != null;
     if (objectBodyContext.objectMember().size() < 2) {
       return;
@@ -1016,150 +938,125 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     }
   }
 
-  private ExpressionNode doVisitObjectBody(
-      List<? extends ObjectBodyContext> ctxs, ExpressionNode parentNode) {
+  private ExpressionNode
+  doVisitObjectBody(List<? extends ObjectBodyContext> ctxs,
+                    ExpressionNode parentNode) {
     for (var ctx : ctxs) {
       parentNode = doVisitObjectBody(ctx, parentNode);
     }
     return parentNode;
   }
 
-  private ExpressionNode doVisitObjectBody(ObjectBodyContext ctx, ExpressionNode parentNode) {
+  private ExpressionNode doVisitObjectBody(ObjectBodyContext ctx,
+                                           ExpressionNode parentNode) {
     checkClosingDelimiter(ctx.err, "}", ctx.stop);
-    return symbolTable.enterObjectScope(
-        (scope) -> {
-          var objectMemberCtx = ctx.objectMember();
-          if (objectMemberCtx.isEmpty()) {
-            return EmptyObjectLiteralNodeGen.create(
-                createSourceSection(ctx.getParent()), parentNode);
-          }
-          var sourceSection = createSourceSection(ctx.getParent());
+    return symbolTable.enterObjectScope((scope) -> {
+      var objectMemberCtx = ctx.objectMember();
+      if (objectMemberCtx.isEmpty()) {
+        return EmptyObjectLiteralNodeGen.create(
+            createSourceSection(ctx.getParent()), parentNode);
+      }
+      var sourceSection = createSourceSection(ctx.getParent());
 
-          var parametersDescriptorBuilder = createFrameDescriptorBuilder(ctx);
-          var parameterTypes = doVisitParameterTypes(ctx);
+      var parametersDescriptorBuilder = createFrameDescriptorBuilder(ctx);
+      var parameterTypes = doVisitParameterTypes(ctx);
 
-          var members = EconomicMaps.<Object, ObjectMember>create();
-          var elements = new ArrayList<ObjectMember>();
-          var keyNodes = new ArrayList<ExpressionNode>();
-          var values = new ArrayList<ObjectMember>();
-          var isConstantKeyNodes = true;
+      var members = EconomicMaps.<Object, ObjectMember>create();
+      var elements = new ArrayList<ObjectMember>();
+      var keyNodes = new ArrayList<ExpressionNode>();
+      var values = new ArrayList<ObjectMember>();
+      var isConstantKeyNodes = true;
 
-          checkSpaceSeparatedObjectMembers(ctx);
-          for (var memberCtx : objectMemberCtx) {
-            if (memberCtx instanceof ObjectPropertyContext propertyCtx) {
-              addProperty(members, doVisitObjectProperty(propertyCtx));
-              continue;
-            }
+      checkSpaceSeparatedObjectMembers(ctx);
+      for (var memberCtx : objectMemberCtx) {
+        if (memberCtx instanceof ObjectPropertyContext propertyCtx) {
+          addProperty(members, doVisitObjectProperty(propertyCtx));
+          continue;
+        }
 
-            if (memberCtx instanceof ObjectEntryContext entryCtx) {
-              var keyAndValue = doVisitObjectEntry(entryCtx);
-              var key = keyAndValue.first;
-              keyNodes.add(key);
-              isConstantKeyNodes = isConstantKeyNodes && key instanceof ConstantNode;
-              values.add(keyAndValue.second);
-              continue;
-            }
+        if (memberCtx instanceof ObjectEntryContext entryCtx) {
+          var keyAndValue = doVisitObjectEntry(entryCtx);
+          var key = keyAndValue.first;
+          keyNodes.add(key);
+          isConstantKeyNodes =
+              isConstantKeyNodes && key instanceof ConstantNode;
+          values.add(keyAndValue.second);
+          continue;
+        }
 
-            if (memberCtx instanceof ObjectElementContext elementCtx) {
-              var element = doVisitObjectElement(elementCtx);
-              elements.add(element);
-              continue;
-            }
+        if (memberCtx instanceof ObjectElementContext elementCtx) {
+          var element = doVisitObjectElement(elementCtx);
+          elements.add(element);
+          continue;
+        }
 
-            if (memberCtx instanceof ObjectMethodContext methodCtx) {
-              addProperty(members, doVisitObjectMethod(methodCtx));
-              continue;
-            }
+        if (memberCtx instanceof ObjectMethodContext methodCtx) {
+          addProperty(members, doVisitObjectMethod(methodCtx));
+          continue;
+        }
 
-            assert memberCtx instanceof ForGeneratorContext
-                || memberCtx instanceof WhenGeneratorContext
-                || memberCtx instanceof MemberPredicateContext
-                || memberCtx instanceof ObjectSpreadContext;
-            // bail out and create GeneratorObjectLiteralNode instead
-            // (but can't we easily reuse members/elements/keyNodes/values?)
-            return doVisitGeneratorObjectBody(ctx, parentNode);
-          }
+        assert memberCtx instanceof ForGeneratorContext ||
+            memberCtx instanceof WhenGeneratorContext ||
+            memberCtx instanceof MemberPredicateContext ||
+            memberCtx instanceof ObjectSpreadContext;
+        // bail out and create GeneratorObjectLiteralNode instead
+        // (but can't we easily reuse members/elements/keyNodes/values?)
+        return doVisitGeneratorObjectBody(ctx, parentNode);
+      }
 
-          var currentScope = symbolTable.getCurrentScope();
-          var parametersDescriptor =
-              parametersDescriptorBuilder == null ? null : parametersDescriptorBuilder.build();
-          if (!elements.isEmpty()) {
-            if (isConstantKeyNodes) { // true if zero key nodes
-              addConstantEntries(members, keyNodes, values);
-              //noinspection ConstantConditions
-              return ElementsLiteralNodeGen.create(
-                  sourceSection,
-                  language,
-                  currentScope.getQualifiedName(),
-                  currentScope.isCustomThisScope(),
-                  parametersDescriptor,
-                  parameterTypes,
-                  members,
-                  elements.toArray(new ObjectMember[0]),
-                  parentNode);
-            }
-            //noinspection ConstantConditions
-            return ElementsEntriesLiteralNodeGen.create(
-                sourceSection,
-                language,
-                currentScope.getQualifiedName(),
-                currentScope.isCustomThisScope(),
-                parametersDescriptor,
-                parameterTypes,
-                members,
-                elements.toArray(new ObjectMember[0]),
-                keyNodes.toArray(new ExpressionNode[0]),
-                values.toArray(new ObjectMember[0]),
-                parentNode);
-          }
-
-          if (!keyNodes.isEmpty()) {
-            if (isConstantKeyNodes) {
-              addConstantEntries(members, keyNodes, values);
-              //noinspection ConstantConditions
-              return ConstantEntriesLiteralNodeGen.create(
-                  sourceSection,
-                  language,
-                  currentScope.getQualifiedName(),
-                  currentScope.isCustomThisScope(),
-                  parametersDescriptor,
-                  parameterTypes,
-                  members,
-                  parentNode);
-            }
-            //noinspection ConstantConditions
-            return EntriesLiteralNodeGen.create(
-                sourceSection,
-                language,
-                currentScope.getQualifiedName(),
-                currentScope.isCustomThisScope(),
-                parametersDescriptor,
-                parameterTypes,
-                members,
-                keyNodes.toArray(new ExpressionNode[0]),
-                values.toArray(new ObjectMember[0]),
-                parentNode);
-          }
-          //noinspection ConstantConditions
-          return PropertiesLiteralNodeGen.create(
-              sourceSection,
-              language,
-              currentScope.getQualifiedName(),
-              currentScope.isCustomThisScope(),
-              parametersDescriptor,
-              parameterTypes,
-              members,
+      var currentScope = symbolTable.getCurrentScope();
+      var parametersDescriptor = parametersDescriptorBuilder == null
+                                     ? null
+                                     : parametersDescriptorBuilder.build();
+      if (!elements.isEmpty()) {
+        if (isConstantKeyNodes) { // true if zero key nodes
+          addConstantEntries(members, keyNodes, values);
+          // noinspection ConstantConditions
+          return ElementsLiteralNodeGen.create(
+              sourceSection, language, currentScope.getQualifiedName(),
+              currentScope.isCustomThisScope(), parametersDescriptor,
+              parameterTypes, members, elements.toArray(new ObjectMember[0]),
               parentNode);
-        });
+        }
+        // noinspection ConstantConditions
+        return ElementsEntriesLiteralNodeGen.create(
+            sourceSection, language, currentScope.getQualifiedName(),
+            currentScope.isCustomThisScope(), parametersDescriptor,
+            parameterTypes, members, elements.toArray(new ObjectMember[0]),
+            keyNodes.toArray(new ExpressionNode[0]),
+            values.toArray(new ObjectMember[0]), parentNode);
+      }
+
+      if (!keyNodes.isEmpty()) {
+        if (isConstantKeyNodes) {
+          addConstantEntries(members, keyNodes, values);
+          // noinspection ConstantConditions
+          return ConstantEntriesLiteralNodeGen.create(
+              sourceSection, language, currentScope.getQualifiedName(),
+              currentScope.isCustomThisScope(), parametersDescriptor,
+              parameterTypes, members, parentNode);
+        }
+        // noinspection ConstantConditions
+        return EntriesLiteralNodeGen.create(
+            sourceSection, language, currentScope.getQualifiedName(),
+            currentScope.isCustomThisScope(), parametersDescriptor,
+            parameterTypes, members, keyNodes.toArray(new ExpressionNode[0]),
+            values.toArray(new ObjectMember[0]), parentNode);
+      }
+      // noinspection ConstantConditions
+      return PropertiesLiteralNodeGen.create(
+          sourceSection, language, currentScope.getQualifiedName(),
+          currentScope.isCustomThisScope(), parametersDescriptor,
+          parameterTypes, members, parentNode);
+    });
   }
 
-  private void addConstantEntries(
-      EconomicMap<Object, ObjectMember> members,
-      List<ExpressionNode> keyNodes,
-      List<ObjectMember> values) {
+  private void addConstantEntries(EconomicMap<Object, ObjectMember> members,
+                                  List<ExpressionNode> keyNodes,
+                                  List<ObjectMember> values) {
 
     for (var i = 0; i < keyNodes.size(); i++) {
-      var key = ((ConstantNode) keyNodes.get(i)).getValue();
+      var key = ((ConstantNode)keyNodes.get(i)).getValue();
       var value = values.get(i);
       var previousValue = EconomicMaps.put(members, key, value);
       if (previousValue != null) {
@@ -1173,36 +1070,31 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
   }
 
   private ObjectMember doVisitObjectElement(ObjectElementContext ctx) {
-    return symbolTable.enterEntry(
-        null,
-        scope -> {
-          var elementNode = visitExpr(ctx.expr());
+    return symbolTable.enterEntry(null, scope -> {
+      var elementNode = visitExpr(ctx.expr());
 
-          var member =
-              new ObjectMember(
-                  createSourceSection(ctx),
-                  elementNode.getSourceSection(),
-                  VmModifier.ELEMENT,
-                  null,
-                  scope.getQualifiedName());
+      var member = new ObjectMember(
+          createSourceSection(ctx), elementNode.getSourceSection(),
+          VmModifier.ELEMENT, null, scope.getQualifiedName());
 
-          if (elementNode instanceof ConstantNode constantNode) {
-            member.initConstantValue(constantNode);
-          } else {
-            member.initMemberNode(
-                new UntypedObjectMemberNode(
-                    language, scope.buildFrameDescriptor(), member, elementNode));
-          }
+      if (elementNode instanceof ConstantNode constantNode) {
+        member.initConstantValue(constantNode);
+      } else {
+        member.initMemberNode(new UntypedObjectMemberNode(
+            language, scope.buildFrameDescriptor(), member, elementNode));
+      }
 
-          return member;
-        });
+      return member;
+    });
   }
 
-  private Pair<ExpressionNode, ObjectMember> doVisitMemberPredicate(MemberPredicateContext ctx) {
+  private Pair<ExpressionNode, ObjectMember>
+  doVisitMemberPredicate(MemberPredicateContext ctx) {
     if (ctx.err1 == null && ctx.err2 == null) {
       throw missingDelimiter("]]", ctx.k.stop.getStopIndex() + 1);
-    } else if (ctx.err1 != null
-        && (ctx.err2 == null || ctx.err1.getStartIndex() != ctx.err2.getStartIndex() - 1)) {
+    } else if (ctx.err1 != null &&
+               (ctx.err2 == null ||
+                ctx.err1.getStartIndex() != ctx.err2.getStartIndex() - 1)) {
       // There shouldn't be any whitespace between the first and second ']'.
       throw wrongDelimiter("]]", "]", ctx.err1.getStartIndex());
     }
@@ -1210,10 +1102,12 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var keyNode = symbolTable.enterCustomThisScope(scope -> visitExpr(ctx.k));
 
     return symbolTable.enterEntry(
-        keyNode, objectMemberInserter(createSourceSection(ctx), keyNode, ctx.v, ctx.objectBody()));
+        keyNode, objectMemberInserter(createSourceSection(ctx), keyNode, ctx.v,
+                                      ctx.objectBody()));
   }
 
-  private Pair<ExpressionNode, ObjectMember> doVisitObjectEntry(ObjectEntryContext ctx) {
+  private Pair<ExpressionNode, ObjectMember>
+  doVisitObjectEntry(ObjectEntryContext ctx) {
     checkClosingDelimiter(ctx.err1, "]", ctx.k.stop);
     if (ctx.err2 != null) {
       throw ctx.err1.getStartIndex() == ctx.err2.getStartIndex() - 1
@@ -1224,40 +1118,33 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var keyNode = visitExpr(ctx.k);
 
     return symbolTable.enterEntry(
-        keyNode, objectMemberInserter(createSourceSection(ctx), keyNode, ctx.v, ctx.objectBody()));
+        keyNode, objectMemberInserter(createSourceSection(ctx), keyNode, ctx.v,
+                                      ctx.objectBody()));
   }
 
-  private Function<EntryScope, Pair<ExpressionNode, ObjectMember>> objectMemberInserter(
-      SourceSection sourceSection,
-      ExpressionNode keyNode,
-      @Nullable ExprContext valueCtx,
-      List<? extends ObjectBodyContext> objectBodyCtxs) {
+  private Function<EntryScope, Pair<ExpressionNode, ObjectMember>>
+  objectMemberInserter(SourceSection sourceSection, ExpressionNode keyNode,
+                       @Nullable ExprContext valueCtx,
+                       List<? extends ObjectBodyContext> objectBodyCtxs) {
     return scope -> {
       var member =
-          new ObjectMember(
-              sourceSection,
-              keyNode.getSourceSection(),
-              VmModifier.ENTRY,
-              null,
-              scope.getQualifiedName());
+          new ObjectMember(sourceSection, keyNode.getSourceSection(),
+                           VmModifier.ENTRY, null, scope.getQualifiedName());
 
       if (valueCtx != null) { // ["key"] = value
         var valueNode = visitExpr(valueCtx);
         if (valueNode instanceof ConstantNode constantNode) {
           member.initConstantValue(constantNode);
         } else {
-          member.initMemberNode(
-              new UntypedObjectMemberNode(
-                  language, scope.buildFrameDescriptor(), member, valueNode));
+          member.initMemberNode(new UntypedObjectMemberNode(
+              language, scope.buildFrameDescriptor(), member, valueNode));
         }
       } else { // ["key"] { ... }
-        var objectBody =
-            doVisitObjectBody(
-                objectBodyCtxs,
-                new ReadSuperEntryNode(unavailableSourceSection(), new GetMemberKeyNode()));
-        member.initMemberNode(
-            new UntypedObjectMemberNode(
-                language, scope.buildFrameDescriptor(), member, objectBody));
+        var objectBody = doVisitObjectBody(
+            objectBodyCtxs, new ReadSuperEntryNode(unavailableSourceSection(),
+                                                   new GetMemberKeyNode()));
+        member.initMemberNode(new UntypedObjectMemberNode(
+            language, scope.buildFrameDescriptor(), member, objectBody));
       }
 
       return Pair.of(keyNode, member);
@@ -1271,23 +1158,22 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     var bodyCtx = ctx.objectBody();
     if (bodyCtx == null) {
       var currentScope = symbolTable.getCurrentScope();
-      //noinspection ConstantConditions
+      // noinspection ConstantConditions
       return PropertiesLiteralNodeGen.create(
-          createSourceSection(ctx),
-          language,
-          currentScope.getQualifiedName(),
-          currentScope.isCustomThisScope(),
-          null,
-          new UnresolvedTypeNode[0],
-          EconomicMaps.create(),
-          verifyNode);
+          createSourceSection(ctx), language, currentScope.getQualifiedName(),
+          currentScope.isCustomThisScope(), null, new UnresolvedTypeNode[0],
+          EconomicMaps.create(), verifyNode);
     }
 
-    return symbolTable.enterAnnotationScope((scope) -> doVisitObjectBody(bodyCtx, verifyNode));
+    return symbolTable.enterAnnotationScope(
+        (scope) -> doVisitObjectBody(bodyCtx, verifyNode));
   }
 
-  private ExpressionNode[] doVisitAnnotations(List<? extends AnnotationContext> ctxs) {
-    return ctxs.stream().map(this::visitAnnotation).toArray(ExpressionNode[]::new);
+  private ExpressionNode[]
+  doVisitAnnotations(List<? extends AnnotationContext> ctxs) {
+    return ctxs.stream()
+        .map(this::visitAnnotation)
+        .toArray(ExpressionNode[] ::new);
   }
 
   @Override
@@ -1309,415 +1195,429 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     var result = VmModifier.NONE;
     for (var ctx : contexts) {
-      int modifier = visitModifier(ctx);
-      if ((modifier & validModifiers) == 0) {
-        throw exceptionBuilder()
-            .evalError(errorMessage, ctx.t.getText())
-            .withSourceSection(createSourceSection(ctx))
-            .build();
+          int modifier = visitModifier(ctx);
+          if ((modifier & validModifiers) == 0) {
+            throw exceptionBuilder()
+                .evalError(errorMessage, ctx.t.getText())
+                .withSourceSection(createSourceSection(ctx))
+                .build();
+          }
+          result += modifier;
+        }
+
+        // flag modifier combinations that are never valid right away
+
+        if (VmModifier.isExternal(result) &&
+            !ModuleKeys.isStdLibModule(moduleKey)) {
+          throw exceptionBuilder()
+              .evalError("cannotDefineExternalMember")
+              .withSourceSection(
+                  createSourceSection(contexts, PklLexer.EXTERNAL))
+              .build();
+        }
+
+        if (VmModifier.isLocal(result) && VmModifier.isHidden(result)) {
+          throw exceptionBuilder()
+              .evalError("redundantHiddenModifier")
+              .withSourceSection(
+                  createSourceSection(contexts, PklLexer.HIDDEN_))
+              .build();
+        }
+
+        if (VmModifier.isLocal(result) && VmModifier.isFixed(result)) {
+          throw exceptionBuilder()
+              .evalError("redundantFixedModifier")
+              .withSourceSection(createSourceSection(contexts, PklLexer.FIXED))
+              .build();
+        }
+
+        if (VmModifier.isAbstract(result) && VmModifier.isOpen(result)) {
+          throw exceptionBuilder()
+              .evalError("redundantOpenModifier")
+              .withSourceSection(createSourceSection(contexts, PklLexer.OPEN))
+              .build();
+        }
+
+        return result;
       }
-      result += modifier;
-    }
 
-    // flag modifier combinations that are never valid right away
+      @Override
+      public UnresolvedMethodNode visitClassMethod(ClassMethodContext ctx) {
+        var headerCtx = ctx.methodHeader();
+        var headerSection = createSourceSection(headerCtx);
 
-    if (VmModifier.isExternal(result) && !ModuleKeys.isStdLibModule(moduleKey)) {
-      throw exceptionBuilder()
-          .evalError("cannotDefineExternalMember")
-          .withSourceSection(createSourceSection(contexts, PklLexer.EXTERNAL))
-          .build();
-    }
+        var typeParameters =
+            visitTypeParameterList(headerCtx.typeParameterList());
 
-    if (VmModifier.isLocal(result) && VmModifier.isHidden(result)) {
-      throw exceptionBuilder()
-          .evalError("redundantHiddenModifier")
-          .withSourceSection(createSourceSection(contexts, PklLexer.HIDDEN_))
-          .build();
-    }
+        var modifiers = doVisitModifiers(headerCtx.modifier(),
+                                         VmModifier.VALID_METHOD_MODIFIERS,
+                                         "invalidMethodModifier");
 
-    if (VmModifier.isLocal(result) && VmModifier.isFixed(result)) {
-      throw exceptionBuilder()
-          .evalError("redundantFixedModifier")
-          .withSourceSection(createSourceSection(contexts, PklLexer.FIXED))
-          .build();
-    }
+        var isLocal = VmModifier.isLocal(modifiers);
+        var methodName =
+            Identifier.method(headerCtx.Identifier().getText(), isLocal);
 
-    if (VmModifier.isAbstract(result) && VmModifier.isOpen(result)) {
-      throw exceptionBuilder()
-          .evalError("redundantOpenModifier")
-          .withSourceSection(createSourceSection(contexts, PklLexer.OPEN))
-          .build();
-    }
+        var bodyContext = ctx.expr();
+        var paramListCtx = headerCtx.parameterList();
+        var descriptorBuilder = createFrameDescriptorBuilder(paramListCtx);
+        var paramCount = paramListCtx.ts.size();
 
-    return result;
-  }
-
-  @Override
-  public UnresolvedMethodNode visitClassMethod(ClassMethodContext ctx) {
-    var headerCtx = ctx.methodHeader();
-    var headerSection = createSourceSection(headerCtx);
-
-    var typeParameters = visitTypeParameterList(headerCtx.typeParameterList());
-
-    var modifiers =
-        doVisitModifiers(
-            headerCtx.modifier(), VmModifier.VALID_METHOD_MODIFIERS, "invalidMethodModifier");
-
-    var isLocal = VmModifier.isLocal(modifiers);
-    var methodName = Identifier.method(headerCtx.Identifier().getText(), isLocal);
-
-    var bodyContext = ctx.expr();
-    var paramListCtx = headerCtx.parameterList();
-    var descriptorBuilder = createFrameDescriptorBuilder(paramListCtx);
-    var paramCount = paramListCtx.ts.size();
-
-    return symbolTable.enterMethod(
-        methodName,
-        getConstLevel(modifiers),
-        descriptorBuilder,
-        typeParameters,
-        scope -> {
-          ExpressionNode bodyNode;
-          if (bodyContext != null) {
-            if (VmModifier.isExternal(modifiers)) {
-              throw exceptionBuilder()
-                  .evalError("externalMemberCannotHaveBody")
-                  .withSourceSection(headerSection)
-                  .build();
-            }
-            if (VmModifier.isAbstract(modifiers)) {
-              throw exceptionBuilder()
-                  .evalError("abstractMemberCannotHaveBody")
-                  .withSourceSection(headerSection)
-                  .build();
-            }
-            bodyNode = visitExpr(bodyContext);
-          } else {
-            if (VmModifier.isExternal(modifiers)) {
-              bodyNode =
-                  externalMemberRegistry.getFunctionBody(
+        return symbolTable.enterMethod(
+            methodName, getConstLevel(modifiers), descriptorBuilder,
+            typeParameters, scope -> {
+              ExpressionNode bodyNode;
+              if (bodyContext != null) {
+                if (VmModifier.isExternal(modifiers)) {
+                  throw exceptionBuilder()
+                      .evalError("externalMemberCannotHaveBody")
+                      .withSourceSection(headerSection)
+                      .build();
+                }
+                if (VmModifier.isAbstract(modifiers)) {
+                  throw exceptionBuilder()
+                      .evalError("abstractMemberCannotHaveBody")
+                      .withSourceSection(headerSection)
+                      .build();
+                }
+                bodyNode = visitExpr(bodyContext);
+              } else {
+                if (VmModifier.isExternal(modifiers)) {
+                  bodyNode = externalMemberRegistry.getFunctionBody(
                       scope.getQualifiedName(), headerSection, paramCount);
-              if (bodyNode instanceof LanguageAwareNode languageAwareNode) {
-                languageAwareNode.initLanguage(language);
+                  if (bodyNode instanceof LanguageAwareNode languageAwareNode) {
+                    languageAwareNode.initLanguage(language);
+                  }
+                } else if (VmModifier.isAbstract(modifiers)) {
+                  bodyNode = new CannotInvokeAbstractFunctionNode(
+                      headerSection, scope.getQualifiedName());
+                } else {
+                  throw exceptionBuilder()
+                      .evalError("missingMethodBody", methodName)
+                      .withSourceSection(headerSection)
+                      .build();
+                }
               }
-            } else if (VmModifier.isAbstract(modifiers)) {
-              bodyNode =
-                  new CannotInvokeAbstractFunctionNode(headerSection, scope.getQualifiedName());
-            } else {
-              throw exceptionBuilder()
-                  .evalError("missingMethodBody", methodName)
-                  .withSourceSection(headerSection)
-                  .build();
-            }
+
+              return new UnresolvedMethodNode(
+                  language, createSourceSection(ctx), headerSection,
+                  scope.buildFrameDescriptor(), createSourceSection(ctx.t),
+                  doVisitAnnotations(ctx.annotation()), modifiers, methodName,
+                  scope.getQualifiedName(), paramCount, typeParameters,
+                  doVisitParameterTypes(paramListCtx),
+                  visitTypeAnnotation(headerCtx.typeAnnotation()),
+                  isMethodReturnTypeChecked, bodyNode);
+            });
+      }
+
+      @Override
+      public ExpressionNode visitFunctionLiteral(FunctionLiteralContext ctx) {
+        var sourceSection = createSourceSection(ctx);
+        var paramCtx = ctx.parameterList();
+        var descriptorBuilder = createFrameDescriptorBuilder(paramCtx);
+        var paramCount = paramCtx.ts.size();
+
+        if (paramCount > 5) {
+          throw exceptionBuilder()
+              .evalError("tooManyFunctionParameters")
+              .withSourceSection(sourceSection)
+              .build();
+        }
+
+        var isCustomThisScope =
+            symbolTable.getCurrentScope().isCustomThisScope();
+
+        return symbolTable.enterLambda(descriptorBuilder, scope -> {
+          var expr = visitExpr(ctx.expr());
+          var functionNode = new UnresolvedFunctionNode(
+              language, scope.buildFrameDescriptor(),
+              new Lambda(sourceSection, scope.getQualifiedName()), paramCount,
+              doVisitParameterTypes(paramCtx), null, expr);
+
+          return new FunctionLiteralNode(sourceSection, functionNode,
+                                         isCustomThisScope);
+        });
+      }
+
+      @Override
+      public ConstantValueNode visitNullLiteral(NullLiteralContext ctx) {
+        return new ConstantValueNode(createSourceSection(ctx),
+                                     VmNull.withoutDefault());
+      }
+
+      @Override
+      public ExpressionNode visitTrueLiteral(TrueLiteralContext ctx) {
+        return new TrueLiteralNode(createSourceSection(ctx));
+      }
+
+      @Override
+      public Object visitFalseLiteral(FalseLiteralContext ctx) {
+        return new FalseLiteralNode(createSourceSection(ctx));
+      }
+
+      @Override
+      public IntLiteralNode visitIntLiteral(IntLiteralContext ctx) {
+        var section = createSourceSection(ctx);
+        var text = ctx.IntLiteral().getText();
+
+        var radix = 10;
+        if (text.startsWith("0x") || text.startsWith("0b") ||
+            text.startsWith("0o")) {
+          var type = text.charAt(1);
+          if (type == 'x') {
+            radix = 16;
+          } else if (type == 'b') {
+            radix = 2;
+          } else {
+            radix = 8;
           }
 
-          return new UnresolvedMethodNode(
-              language,
+          text = text.substring(2);
+          if (text.startsWith("_")) {
+            invalidSeparatorPosition(
+                source.createSection(ctx.getStart().getStartIndex() + 2, 1));
+          }
+        }
+
+        // relies on grammar rule nesting depth, but a breakage won't go
+        // unnoticed by tests
+        if (ctx.getParent() instanceof UnaryMinusExprContext) {
+          // handle negation here to make parsing of base.MinInt work
+          // also moves negation from runtime to parse time
+          text = "-" + text;
+        }
+
+        text = text.replaceAll("_", "");
+        try {
+          var num = Long.parseLong(text, radix);
+          return new IntLiteralNode(section, num);
+        } catch (NumberFormatException e) {
+          throw exceptionBuilder()
+              .evalError("intTooLarge", text)
+              .withSourceSection(section)
+              .build();
+        }
+      }
+
+      @Override
+      public FloatLiteralNode visitFloatLiteral(FloatLiteralContext ctx) {
+        var section = createSourceSection(ctx);
+        var text = ctx.FloatLiteral().getText();
+        // relies on grammar rule nesting depth, but a breakage won't go
+        // unnoticed by tests
+        if (ctx.getParent() instanceof UnaryMinusExprContext) {
+          // handle negation here for consistency with visitIntegerLiteral
+          // also moves negation from runtime to parse time
+          text = "-" + text;
+        }
+
+        var dotIdx = text.indexOf('.');
+        if (dotIdx != -1 && text.charAt(dotIdx + 1) == '_') {
+          invalidSeparatorPosition(source.createSection(
+              ctx.getStart().getStartIndex() + dotIdx + 1, 1));
+        }
+        var exponentIdx = text.indexOf('e');
+        if (exponentIdx == -1) {
+          exponentIdx = text.indexOf('E');
+        }
+        if (exponentIdx != -1 && text.charAt(exponentIdx + 1) == '_') {
+          invalidSeparatorPosition(source.createSection(
+              ctx.getStart().getStartIndex() + exponentIdx + 1, 1));
+        }
+
+        text = text.replaceAll("_", "");
+        try {
+          var num = Double.parseDouble(text);
+          return new FloatLiteralNode(section, num);
+        } catch (NumberFormatException e) {
+          throw exceptionBuilder()
+              .evalError("floatTooLarge", text)
+              .withSourceSection(section)
+              .build();
+        }
+      }
+
+      @Override
+      public Object visitSingleLineStringLiteral(
+          SingleLineStringLiteralContext ctx) {
+        checkSingleLineStringDelimiters(ctx.t, ctx.t2);
+
+        var singleParts = ctx.singleLineStringPart();
+        if (singleParts.isEmpty()) {
+          return new ConstantValueNode(createSourceSection(ctx), "");
+        }
+
+        if (singleParts.size() == 1) {
+          var ts = singleParts.get(0).ts;
+          if (!ts.isEmpty()) {
+            return new ConstantValueNode(
+                createSourceSection(ctx),
+                doVisitSingleLineConstantStringPart(ts));
+          }
+        }
+
+        return new InterpolatedStringLiteralNode(
+            createSourceSection(ctx), singleParts.stream()
+                                          .map(this::visitSingleLineStringPart)
+                                          .toArray(ExpressionNode[] ::new));
+      }
+
+      @Override
+      public Object visitMultiLineStringLiteral(
+          MultiLineStringLiteralContext ctx) {
+        var multiPart = ctx.multiLineStringPart();
+
+        if (multiPart.isEmpty()) {
+          throw exceptionBuilder()
+              .evalError("stringContentMustBeginOnNewLine")
+              .withSourceSection(createSourceSection(ctx.t2))
+              .build();
+        }
+
+        var firstPart = multiPart.get(0);
+        if (firstPart.e != null ||
+            firstPart.ts.get(0).getType() != PklLexer.MLNewline) {
+          throw exceptionBuilder()
+              .evalError("stringContentMustBeginOnNewLine")
+              .withSourceSection(firstPart.e != null
+                                     ? startOf(firstPart.MLInterpolation())
+                                     : startOf(firstPart.ts.get(0)))
+              .build();
+        }
+
+        var lastPart = multiPart.get(multiPart.size() - 1);
+        var commonIndent = getCommonIndent(lastPart, ctx.t2);
+
+        if (multiPart.size() == 1) {
+          return new ConstantValueNode(
               createSourceSection(ctx),
-              headerSection,
-              scope.buildFrameDescriptor(),
-              createSourceSection(ctx.t),
-              doVisitAnnotations(ctx.annotation()),
-              modifiers,
-              methodName,
-              scope.getQualifiedName(),
-              paramCount,
-              typeParameters,
-              doVisitParameterTypes(paramListCtx),
-              visitTypeAnnotation(headerCtx.typeAnnotation()),
-              isMethodReturnTypeChecked,
-              bodyNode);
-        });
-  }
+              doVisitMultiLineConstantStringPart(firstPart.ts, commonIndent,
+                                                 true, true));
+        }
 
-  @Override
-  public ExpressionNode visitFunctionLiteral(FunctionLiteralContext ctx) {
-    var sourceSection = createSourceSection(ctx);
-    var paramCtx = ctx.parameterList();
-    var descriptorBuilder = createFrameDescriptorBuilder(paramCtx);
-    var paramCount = paramCtx.ts.size();
+        final var multiPartExprs = new ExpressionNode[multiPart.size()];
+        var lastIndex = multiPart.size() - 1;
 
-    if (paramCount > 5) {
-      throw exceptionBuilder()
-          .evalError("tooManyFunctionParameters")
-          .withSourceSection(sourceSection)
-          .build();
-    }
+        for (var i = 0; i <= lastIndex; i++) {
+          multiPartExprs[i] = doVisitMultiLineStringPart(
+              multiPart.get(i), commonIndent, i == 0, i == lastIndex);
+        }
 
-    var isCustomThisScope = symbolTable.getCurrentScope().isCustomThisScope();
-
-    return symbolTable.enterLambda(
-        descriptorBuilder,
-        scope -> {
-          var expr = visitExpr(ctx.expr());
-          var functionNode =
-              new UnresolvedFunctionNode(
-                  language,
-                  scope.buildFrameDescriptor(),
-                  new Lambda(sourceSection, scope.getQualifiedName()),
-                  paramCount,
-                  doVisitParameterTypes(paramCtx),
-                  null,
-                  expr);
-
-          return new FunctionLiteralNode(sourceSection, functionNode, isCustomThisScope);
-        });
-  }
-
-  @Override
-  public ConstantValueNode visitNullLiteral(NullLiteralContext ctx) {
-    return new ConstantValueNode(createSourceSection(ctx), VmNull.withoutDefault());
-  }
-
-  @Override
-  public ExpressionNode visitTrueLiteral(TrueLiteralContext ctx) {
-    return new TrueLiteralNode(createSourceSection(ctx));
-  }
-
-  @Override
-  public Object visitFalseLiteral(FalseLiteralContext ctx) {
-    return new FalseLiteralNode(createSourceSection(ctx));
-  }
-
-  @Override
-  public IntLiteralNode visitIntLiteral(IntLiteralContext ctx) {
-    var section = createSourceSection(ctx);
-    var text = ctx.IntLiteral().getText();
-
-    var radix = 10;
-    if (text.startsWith("0x") || text.startsWith("0b") || text.startsWith("0o")) {
-      var type = text.charAt(1);
-      if (type == 'x') {
-        radix = 16;
-      } else if (type == 'b') {
-        radix = 2;
-      } else {
-        radix = 8;
+        return new InterpolatedStringLiteralNode(createSourceSection(ctx),
+                                                 multiPartExprs);
       }
 
-      text = text.substring(2);
-      if (text.startsWith("_")) {
-        invalidSeparatorPosition(source.createSection(ctx.getStart().getStartIndex() + 2, 1));
+      @Override
+      public String visitStringConstant(StringConstantContext ctx) {
+        checkSingleLineStringDelimiters(ctx.t, ctx.t2);
+        return doVisitSingleLineConstantStringPart(ctx.ts);
       }
-    }
 
-    // relies on grammar rule nesting depth, but a breakage won't go unnoticed by tests
-    if (ctx.getParent() instanceof UnaryMinusExprContext) {
-      // handle negation here to make parsing of base.MinInt work
-      // also moves negation from runtime to parse time
-      text = "-" + text;
-    }
+      @Override
+      public ExpressionNode visitSingleLineStringPart(
+          SingleLineStringPartContext ctx) {
+        if (ctx.e != null) {
+          return ToStringNodeGen.create(createSourceSection(ctx),
+                                        visitExpr(ctx.e));
+        }
 
-    text = text.replaceAll("_", "");
-    try {
-      var num = Long.parseLong(text, radix);
-      return new IntLiteralNode(section, num);
-    } catch (NumberFormatException e) {
-      throw exceptionBuilder().evalError("intTooLarge", text).withSourceSection(section).build();
-    }
-  }
-
-  @Override
-  public FloatLiteralNode visitFloatLiteral(FloatLiteralContext ctx) {
-    var section = createSourceSection(ctx);
-    var text = ctx.FloatLiteral().getText();
-    // relies on grammar rule nesting depth, but a breakage won't go unnoticed by tests
-    if (ctx.getParent() instanceof UnaryMinusExprContext) {
-      // handle negation here for consistency with visitIntegerLiteral
-      // also moves negation from runtime to parse time
-      text = "-" + text;
-    }
-
-    var dotIdx = text.indexOf('.');
-    if (dotIdx != -1 && text.charAt(dotIdx + 1) == '_') {
-      invalidSeparatorPosition(
-          source.createSection(ctx.getStart().getStartIndex() + dotIdx + 1, 1));
-    }
-    var exponentIdx = text.indexOf('e');
-    if (exponentIdx == -1) {
-      exponentIdx = text.indexOf('E');
-    }
-    if (exponentIdx != -1 && text.charAt(exponentIdx + 1) == '_') {
-      invalidSeparatorPosition(
-          source.createSection(ctx.getStart().getStartIndex() + exponentIdx + 1, 1));
-    }
-
-    text = text.replaceAll("_", "");
-    try {
-      var num = Double.parseDouble(text);
-      return new FloatLiteralNode(section, num);
-    } catch (NumberFormatException e) {
-      throw exceptionBuilder().evalError("floatTooLarge", text).withSourceSection(section).build();
-    }
-  }
-
-  @Override
-  public Object visitSingleLineStringLiteral(SingleLineStringLiteralContext ctx) {
-    checkSingleLineStringDelimiters(ctx.t, ctx.t2);
-
-    var singleParts = ctx.singleLineStringPart();
-    if (singleParts.isEmpty()) {
-      return new ConstantValueNode(createSourceSection(ctx), "");
-    }
-
-    if (singleParts.size() == 1) {
-      var ts = singleParts.get(0).ts;
-      if (!ts.isEmpty()) {
         return new ConstantValueNode(
-            createSourceSection(ctx), doVisitSingleLineConstantStringPart(ts));
+            createSourceSection(ctx),
+            doVisitSingleLineConstantStringPart(ctx.ts));
       }
-    }
 
-    return new InterpolatedStringLiteralNode(
-        createSourceSection(ctx),
-        singleParts.stream().map(this::visitSingleLineStringPart).toArray(ExpressionNode[]::new));
-  }
+      @Override
+      public ExpressionNode visitMultiLineStringPart(
+          MultiLineStringPartContext ctx) {
+        throw exceptionBuilder().unreachableCode().build();
+      }
 
-  @Override
-  public Object visitMultiLineStringLiteral(MultiLineStringLiteralContext ctx) {
-    var multiPart = ctx.multiLineStringPart();
+      private ExpressionNode createResolveVariableNode(
+          SourceSection section, Identifier propertyName) {
+        var scope = symbolTable.getCurrentScope();
+        return new ResolveVariableNode(
+            section, propertyName, isBaseModule, scope.isCustomThisScope(),
+            scope.getConstLevel(), scope.getConstDepth());
+      }
 
-    if (multiPart.isEmpty()) {
-      throw exceptionBuilder()
-          .evalError("stringContentMustBeginOnNewLine")
-          .withSourceSection(createSourceSection(ctx.t2))
-          .build();
-    }
+      private ExpressionNode doVisitListLiteral(
+          ExprContext ctx, ArgumentListContext argListCtx) {
+        var elementNodes = createCollectionArgumentNodes(argListCtx);
 
-    var firstPart = multiPart.get(0);
-    if (firstPart.e != null || firstPart.ts.get(0).getType() != PklLexer.MLNewline) {
-      throw exceptionBuilder()
-          .evalError("stringContentMustBeginOnNewLine")
-          .withSourceSection(
-              firstPart.e != null
-                  ? startOf(firstPart.MLInterpolation())
-                  : startOf(firstPart.ts.get(0)))
-          .build();
-    }
+        if (elementNodes.first.length == 0) {
+          return new ConstantValueNode(VmList.EMPTY);
+        }
 
-    var lastPart = multiPart.get(multiPart.size() - 1);
-    var commonIndent = getCommonIndent(lastPart, ctx.t2);
+        return elementNodes.second
+            ? new ConstantValueNode(
+                  createSourceSection(ctx),
+                  VmList.createFromConstantNodes(elementNodes.first))
+            : new ListLiteralNode(createSourceSection(ctx), elementNodes.first);
+      }
 
-    if (multiPart.size() == 1) {
-      return new ConstantValueNode(
-          createSourceSection(ctx),
-          doVisitMultiLineConstantStringPart(firstPart.ts, commonIndent, true, true));
-    }
+      private ExpressionNode doVisitSetLiteral(ExprContext ctx,
+                                               ArgumentListContext argListCtx) {
+        var elementNodes = createCollectionArgumentNodes(argListCtx);
 
-    final var multiPartExprs = new ExpressionNode[multiPart.size()];
-    var lastIndex = multiPart.size() - 1;
+        if (elementNodes.first.length == 0) {
+          return new ConstantValueNode(VmSet.EMPTY);
+        }
 
-    for (var i = 0; i <= lastIndex; i++) {
-      multiPartExprs[i] =
-          doVisitMultiLineStringPart(multiPart.get(i), commonIndent, i == 0, i == lastIndex);
-    }
+        return elementNodes.second
+            ? new ConstantValueNode(
+                  createSourceSection(ctx),
+                  VmSet.createFromConstantNodes(elementNodes.first))
+            : new SetLiteralNode(createSourceSection(ctx), elementNodes.first);
+      }
 
-    return new InterpolatedStringLiteralNode(createSourceSection(ctx), multiPartExprs);
-  }
+      private ExpressionNode doVisitMapLiteral(ExprContext ctx,
+                                               ArgumentListContext argListCtx) {
+        var keyAndValueNodes = createCollectionArgumentNodes(argListCtx);
 
-  @Override
-  public String visitStringConstant(StringConstantContext ctx) {
-    checkSingleLineStringDelimiters(ctx.t, ctx.t2);
-    return doVisitSingleLineConstantStringPart(ctx.ts);
-  }
+        if (keyAndValueNodes.first.length == 0) {
+          return new ConstantValueNode(VmMap.EMPTY);
+        }
 
-  @Override
-  public ExpressionNode visitSingleLineStringPart(SingleLineStringPartContext ctx) {
-    if (ctx.e != null) {
-      return ToStringNodeGen.create(createSourceSection(ctx), visitExpr(ctx.e));
-    }
+        if (keyAndValueNodes.first.length % 2 != 0) {
+          throw exceptionBuilder()
+              .evalError("missingMapValue")
+              .withSourceSection(createSourceSection(ctx.stop))
+              .build();
+        }
 
-    return new ConstantValueNode(
-        createSourceSection(ctx), doVisitSingleLineConstantStringPart(ctx.ts));
-  }
+        return keyAndValueNodes.second
+            ? new ConstantValueNode(
+                  createSourceSection(ctx),
+                  VmMap.createFromConstantNodes(keyAndValueNodes.first))
+            : new MapLiteralNode(createSourceSection(ctx),
+                                 keyAndValueNodes.first);
+      }
 
-  @Override
-  public ExpressionNode visitMultiLineStringPart(MultiLineStringPartContext ctx) {
-    throw exceptionBuilder().unreachableCode().build();
-  }
+      private Pair<ExpressionNode[], Boolean> createCollectionArgumentNodes(
+          ArgumentListContext ctx) {
+        checkCommaSeparatedElements(ctx, ctx.es, ctx.errs);
+        checkClosingDelimiter(ctx.err, ")", ctx.stop);
 
-  private ExpressionNode createResolveVariableNode(SourceSection section, Identifier propertyName) {
-    var scope = symbolTable.getCurrentScope();
-    return new ResolveVariableNode(
-        section,
-        propertyName,
-        isBaseModule,
-        scope.isCustomThisScope(),
-        scope.getConstLevel(),
-        scope.getConstDepth());
-  }
+        var exprCtxs = ctx.expr();
+        var elementNodes = new ExpressionNode[exprCtxs.size()];
+        var isConstantNodes = true;
 
-  private ExpressionNode doVisitListLiteral(ExprContext ctx, ArgumentListContext argListCtx) {
-    var elementNodes = createCollectionArgumentNodes(argListCtx);
+        for (var i = 0; i < elementNodes.length; i++) {
+          var exprNode = visitExpr(exprCtxs.get(i));
+          elementNodes[i] = exprNode;
+          isConstantNodes = isConstantNodes && exprNode instanceof ConstantNode;
+        }
 
-    if (elementNodes.first.length == 0) {
-      return new ConstantValueNode(VmList.EMPTY);
-    }
+        return Pair.of(elementNodes, isConstantNodes);
+      }
 
-    return elementNodes.second
-        ? new ConstantValueNode(
-            createSourceSection(ctx), VmList.createFromConstantNodes(elementNodes.first))
-        : new ListLiteralNode(createSourceSection(ctx), elementNodes.first);
-  }
+      @Override
+      public ExpressionNode visitExpr(ExprContext ctx) {
+        return (ExpressionNode)ctx.accept(this);
+      }
 
-  private ExpressionNode doVisitSetLiteral(ExprContext ctx, ArgumentListContext argListCtx) {
-    var elementNodes = createCollectionArgumentNodes(argListCtx);
-
-    if (elementNodes.first.length == 0) {
-      return new ConstantValueNode(VmSet.EMPTY);
-    }
-
-    return elementNodes.second
-        ? new ConstantValueNode(
-            createSourceSection(ctx), VmSet.createFromConstantNodes(elementNodes.first))
-        : new SetLiteralNode(createSourceSection(ctx), elementNodes.first);
-  }
-
-  private ExpressionNode doVisitMapLiteral(ExprContext ctx, ArgumentListContext argListCtx) {
-    var keyAndValueNodes = createCollectionArgumentNodes(argListCtx);
-
-    if (keyAndValueNodes.first.length == 0) {
-      return new ConstantValueNode(VmMap.EMPTY);
-    }
-
-    if (keyAndValueNodes.first.length % 2 != 0) {
-      throw exceptionBuilder()
-          .evalError("missingMapValue")
-          .withSourceSection(createSourceSection(ctx.stop))
-          .build();
-    }
-
-    return keyAndValueNodes.second
-        ? new ConstantValueNode(
-            createSourceSection(ctx), VmMap.createFromConstantNodes(keyAndValueNodes.first))
-        : new MapLiteralNode(createSourceSection(ctx), keyAndValueNodes.first);
-  }
-
-  private Pair<ExpressionNode[], Boolean> createCollectionArgumentNodes(ArgumentListContext ctx) {
-    checkCommaSeparatedElements(ctx, ctx.es, ctx.errs);
-    checkClosingDelimiter(ctx.err, ")", ctx.stop);
-
-    var exprCtxs = ctx.expr();
-    var elementNodes = new ExpressionNode[exprCtxs.size()];
-    var isConstantNodes = true;
-
-    for (var i = 0; i < elementNodes.length; i++) {
-      var exprNode = visitExpr(exprCtxs.get(i));
-      elementNodes[i] = exprNode;
-      isConstantNodes = isConstantNodes && exprNode instanceof ConstantNode;
-    }
-
-    return Pair.of(elementNodes, isConstantNodes);
-  }
-
-  @Override
-  public ExpressionNode visitExpr(ExprContext ctx) {
-    return (ExpressionNode) ctx.accept(this);
-  }
-
-  @Override
-  public Object visitComparisonExpr(ComparisonExprContext ctx) {
-    return switch (ctx.t.getType()) {
+      @Override
+      public Object visitComparisonExpr(ComparisonExprContext ctx) {
+        return switch (ctx.t.getType()) {
       case PklLexer.LT ->
           LessThanNodeGen.create(createSourceSection(ctx), visitExpr(ctx.l), visitExpr(ctx.r));
       case PklLexer.GT ->
@@ -1754,125 +1654,124 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
                 : IoUtils.inferModuleName(moduleKey),
             true);
 
-    return symbolTable.enterProperty(
-        importName,
-        ConstLevel.NONE,
-        scope -> {
-          var modifiers = VmModifier.IMPORT | VmModifier.LOCAL | VmModifier.CONST;
+        return symbolTable.enterProperty(importName, ConstLevel.NONE, scope -> {
+          var modifiers =
+              VmModifier.IMPORT | VmModifier.LOCAL | VmModifier.CONST;
           if (ctx.IMPORT_GLOB() != null) {
             modifiers = modifiers | VmModifier.GLOB;
           }
-          var result =
-              new ObjectMember(
-                  importNode.getSourceSection(),
-                  importNode.getSourceSection(),
-                  modifiers,
-                  scope.getName(),
-                  scope.getQualifiedName());
+          var result = new ObjectMember(
+              importNode.getSourceSection(), importNode.getSourceSection(),
+              modifiers, scope.getName(), scope.getQualifiedName());
 
-          result.initMemberNode(
-              new UntypedObjectMemberNode(
-                  language, scope.buildFrameDescriptor(), result, importNode));
+          result.initMemberNode(new UntypedObjectMemberNode(
+              language, scope.buildFrameDescriptor(), result, importNode));
 
           return result;
         });
-  }
-
-  private URI resolveImport(String importUri, StringConstantContext importUriCtx) {
-    URI parsedUri;
-    try {
-      parsedUri = IoUtils.toUri(importUri);
-    } catch (URISyntaxException e) {
-      throw exceptionBuilder()
-          .evalError("invalidModuleUri", importUri)
-          .withHint(e.getReason())
-          .withSourceSection(createSourceSection(importUriCtx))
-          .build();
-    }
-    URI resolvedUri;
-    var context = VmContext.get(null);
-    try {
-      resolvedUri = IoUtils.resolve(context.getSecurityManager(), moduleKey, parsedUri);
-    } catch (FileNotFoundException e) {
-
-      var exceptionBuilder =
-          exceptionBuilder()
-              .evalError("cannotFindModule", importUri)
-              .withSourceSection(createSourceSection(importUriCtx));
-      var path = parsedUri.getPath();
-      if (path != null && path.contains("\\")) {
-        exceptionBuilder.withHint(
-            "To resolve modules in nested directories, use `/` as the directory separator.");
       }
-      throw exceptionBuilder.build();
-    } catch (URISyntaxException e) {
-      throw exceptionBuilder()
-          .evalError("invalidModuleUri", importUri)
-          .withHint(e.getReason())
-          .withSourceSection(createSourceSection(importUriCtx))
-          .build();
-    } catch (IOException e) {
-      throw exceptionBuilder()
-          .evalError("ioErrorLoadingModule", importUri)
-          .withCause(e)
-          .withSourceSection(createSourceSection(importUriCtx))
-          .build();
-    } catch (SecurityManagerException | PackageLoadError e) {
-      throw exceptionBuilder()
-          .withSourceSection(createSourceSection(importUriCtx))
-          .withCause(e)
-          .build();
-    } catch (VmException e) {
-      throw exceptionBuilder()
-          .evalError(e.getMessage(), e.getMessageArguments())
-          .withCause(e.getCause())
-          .withHint(e.getHint())
-          .withSourceSection(createSourceSection(importUriCtx))
-          .build();
-    }
 
-    if (!resolvedUri.isAbsolute()) {
-      throw exceptionBuilder()
-          .evalError("cannotHaveRelativeImport", moduleKey.getUri())
-          .withSourceSection(createSourceSection(importUriCtx))
-          .build();
-    }
-    return resolvedUri;
-  }
+      private URI resolveImport(String importUri,
+                                StringConstantContext importUriCtx) {
+        URI parsedUri;
+        try {
+          parsedUri = IoUtils.toUri(importUri);
+        } catch (URISyntaxException e) {
+          throw exceptionBuilder()
+              .evalError("invalidModuleUri", importUri)
+              .withHint(e.getReason())
+              .withSourceSection(createSourceSection(importUriCtx))
+              .build();
+        }
+        URI resolvedUri;
+        var context = VmContext.get(null);
+        try {
+          resolvedUri = IoUtils.resolve(context.getSecurityManager(), moduleKey,
+                                        parsedUri);
+        } catch (FileNotFoundException e) {
 
-  @Override
-  public ExpressionNode visitQualifiedIdentifier(QualifiedIdentifierContext ctx) {
-    var firstToken = ctx.ts.get(0);
-    var result =
-        createResolveVariableNode(createSourceSection(firstToken), toIdentifier(firstToken));
+          var exceptionBuilder =
+              exceptionBuilder()
+                  .evalError("cannotFindModule", importUri)
+                  .withSourceSection(createSourceSection(importUriCtx));
+          var path = parsedUri.getPath();
+          if (path != null && path.contains("\\")) {
+            exceptionBuilder.withHint(
+                "To resolve modules in nested directories, use `/` as the " +
+                "directory separator.");
+          }
+          throw exceptionBuilder.build();
+        } catch (URISyntaxException e) {
+          throw exceptionBuilder()
+              .evalError("invalidModuleUri", importUri)
+              .withHint(e.getReason())
+              .withSourceSection(createSourceSection(importUriCtx))
+              .build();
+        } catch (IOException e) {
+          throw exceptionBuilder()
+              .evalError("ioErrorLoadingModule", importUri)
+              .withCause(e)
+              .withSourceSection(createSourceSection(importUriCtx))
+              .build();
+        } catch (SecurityManagerException | PackageLoadError e) {
+          throw exceptionBuilder()
+              .withSourceSection(createSourceSection(importUriCtx))
+              .withCause(e)
+              .build();
+        } catch (VmException e) {
+          throw exceptionBuilder()
+              .evalError(e.getMessage(), e.getMessageArguments())
+              .withCause(e.getCause())
+              .withHint(e.getHint())
+              .withSourceSection(createSourceSection(importUriCtx))
+              .build();
+        }
 
-    for (var i = 1; i < ctx.ts.size(); i++) {
-      var token = ctx.ts.get(i);
-      result = ReadPropertyNodeGen.create(createSourceSection(token), toIdentifier(token), result);
-    }
+        if (!resolvedUri.isAbsolute()) {
+          throw exceptionBuilder()
+              .evalError("cannotHaveRelativeImport", moduleKey.getUri())
+              .withSourceSection(createSourceSection(importUriCtx))
+              .build();
+        }
+        return resolvedUri;
+      }
 
-    return result;
-  }
+      @Override
+      public ExpressionNode visitQualifiedIdentifier(
+          QualifiedIdentifierContext ctx) {
+        var firstToken = ctx.ts.get(0);
+        var result = createResolveVariableNode(createSourceSection(firstToken),
+                                               toIdentifier(firstToken));
 
-  @Override
-  public Object visitNonNullExpr(NonNullExprContext ctx) {
-    return new NonNullNode(createSourceSection(ctx), visitExpr(ctx.expr()));
-  }
+        for (var i = 1; i < ctx.ts.size(); i++) {
+          var token = ctx.ts.get(i);
+          result = ReadPropertyNodeGen.create(createSourceSection(token),
+                                              toIdentifier(token), result);
+        }
 
-  @Override
-  public ExpressionNode visitUnaryMinusExpr(UnaryMinusExprContext ctx) {
-    var childExpr = visitExpr(ctx.expr());
-    if (childExpr instanceof IntLiteralNode || childExpr instanceof FloatLiteralNode) {
-      // negation already handled in child expr (see corresponding code)
-      return childExpr;
-    }
+        return result;
+      }
 
-    return UnaryMinusNodeGen.create(createSourceSection(ctx), childExpr);
-  }
+      @Override
+      public Object visitNonNullExpr(NonNullExprContext ctx) {
+        return new NonNullNode(createSourceSection(ctx), visitExpr(ctx.expr()));
+      }
 
-  @Override
-  public ExpressionNode visitAdditiveExpr(AdditiveExprContext ctx) {
-    return switch (ctx.t.getType()) {
+      @Override
+      public ExpressionNode visitUnaryMinusExpr(UnaryMinusExprContext ctx) {
+        var childExpr = visitExpr(ctx.expr());
+        if (childExpr instanceof IntLiteralNode || childExpr instanceof
+                                                       FloatLiteralNode) {
+          // negation already handled in child expr (see corresponding code)
+          return childExpr;
+        }
+
+        return UnaryMinusNodeGen.create(createSourceSection(ctx), childExpr);
+      }
+
+      @Override
+      public ExpressionNode visitAdditiveExpr(AdditiveExprContext ctx) {
+        return switch (ctx.t.getType()) {
       case PklLexer.PLUS ->
           AdditionNodeGen.create(createSourceSection(ctx), visitExpr(ctx.l), visitExpr(ctx.r));
       case PklLexer.MINUS ->
@@ -2137,656 +2036,707 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
 
     var builder = FrameDescriptor.newBuilder(ctx.ts.size());
     for (var param : ctx.ts) {
-      var ident = isIgnored(param) ? null : toIdentifier(param.typedIdentifier().Identifier());
-      builder.addSlot(FrameSlotKind.Illegal, ident, null);
-    }
-    return builder;
-  }
+          var ident = isIgnored(param)
+                          ? null
+                          : toIdentifier(param.typedIdentifier().Identifier());
+          builder.addSlot(FrameSlotKind.Illegal, ident, null);
+        }
+        return builder;
+      }
 
-  private @Nullable FrameDescriptor.Builder createFrameDescriptorBuilder(ObjectBodyContext ctx) {
-    if (ctx.ps.isEmpty()) return null;
+      private @Nullable FrameDescriptor.Builder createFrameDescriptorBuilder(
+          ObjectBodyContext ctx) {
+        if (ctx.ps.isEmpty())
+          return null;
 
-    checkCommaSeparatedElements(ctx, ctx.ps, ctx.errs);
+        checkCommaSeparatedElements(ctx, ctx.ps, ctx.errs);
 
-    var builder = FrameDescriptor.newBuilder(ctx.ps.size());
-    for (var param : ctx.ps) {
-      var ident = isIgnored(param) ? null : toIdentifier(param.typedIdentifier().Identifier());
-      builder.addSlot(FrameSlotKind.Illegal, ident, null);
-    }
-    return builder;
-  }
+        var builder = FrameDescriptor.newBuilder(ctx.ps.size());
+        for (var param : ctx.ps) {
+          var ident = isIgnored(param)
+                          ? null
+                          : toIdentifier(param.typedIdentifier().Identifier());
+          builder.addSlot(FrameSlotKind.Illegal, ident, null);
+        }
+        return builder;
+      }
 
-  private UnresolvedTypeNode[] doVisitParameterTypes(ParameterListContext ctx) {
-    return ctx.ts.stream()
-        .map(
-            it -> isIgnored(it) ? null : visitTypeAnnotation(it.typedIdentifier().typeAnnotation()))
-        .toArray(UnresolvedTypeNode[]::new);
-  }
+      private UnresolvedTypeNode[] doVisitParameterTypes(
+          ParameterListContext ctx) {
+        return ctx.ts.stream()
+            .map(it
+                 -> isIgnored(it) ? null
+                                  : visitTypeAnnotation(
+                                        it.typedIdentifier().typeAnnotation()))
+            .toArray(UnresolvedTypeNode[] ::new);
+      }
 
-  private UnresolvedTypeNode[] doVisitParameterTypes(ObjectBodyContext ctx) {
-    return ctx.ps.stream()
-        .map(
-            it -> isIgnored(it) ? null : visitTypeAnnotation(it.typedIdentifier().typeAnnotation()))
-        .toArray(UnresolvedTypeNode[]::new);
-  }
+      private UnresolvedTypeNode[] doVisitParameterTypes(
+          ObjectBodyContext ctx) {
+        return ctx.ps.stream()
+            .map(it
+                 -> isIgnored(it) ? null
+                                  : visitTypeAnnotation(
+                                        it.typedIdentifier().typeAnnotation()))
+            .toArray(UnresolvedTypeNode[] ::new);
+      }
 
-  @Override
-  public Object visitTypedIdentifier(TypedIdentifierContext ctx) {
-    throw exceptionBuilder().unreachableCode().build(); // handled directly
-  }
+      @Override
+      public Object visitTypedIdentifier(TypedIdentifierContext ctx) {
+        throw exceptionBuilder().unreachableCode().build(); // handled directly
+      }
 
-  @Override
-  public Object visitThrowExpr(ThrowExprContext ctx) {
-    var exprCtx = ctx.expr();
-    checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
+      @Override
+      public Object visitThrowExpr(ThrowExprContext ctx) {
+        var exprCtx = ctx.expr();
+        checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
 
-    return ThrowNodeGen.create(createSourceSection(ctx), visitExpr(exprCtx));
-  }
+        return ThrowNodeGen.create(createSourceSection(ctx),
+                                   visitExpr(exprCtx));
+      }
 
-  @Override
-  public Object visitTraceExpr(TraceExprContext ctx) {
-    var exprCtx = ctx.expr();
-    checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
+      @Override
+      public Object visitTraceExpr(TraceExprContext ctx) {
+        var exprCtx = ctx.expr();
+        checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
 
-    return new TraceNode(createSourceSection(ctx), visitExpr(exprCtx));
-  }
+        return new TraceNode(createSourceSection(ctx), visitExpr(exprCtx));
+      }
 
-  @Override
-  public Object visitImportExpr(ImportExprContext ctx) {
-    var importUriCtx = ctx.stringConstant();
-    checkClosingDelimiter(ctx.err, ")", importUriCtx.stop);
-    return doVisitImport(ctx.t.getType(), ctx, importUriCtx);
-  }
+      @Override
+      public Object visitImportExpr(ImportExprContext ctx) {
+        var importUriCtx = ctx.stringConstant();
+        checkClosingDelimiter(ctx.err, ")", importUriCtx.stop);
+        return doVisitImport(ctx.t.getType(), ctx, importUriCtx);
+      }
 
-  @Override
-  public Object visitIfExpr(IfExprContext ctx) {
-    checkClosingDelimiter(ctx.err, ")", ctx.c.stop);
+      @Override
+      public Object visitIfExpr(IfExprContext ctx) {
+        checkClosingDelimiter(ctx.err, ")", ctx.c.stop);
 
-    return new IfElseNode(
-        createSourceSection(ctx), visitExpr(ctx.c), visitExpr(ctx.l), visitExpr(ctx.r));
-  }
+        return new IfElseNode(createSourceSection(ctx), visitExpr(ctx.c),
+                              visitExpr(ctx.l), visitExpr(ctx.r));
+      }
 
-  @Override
-  public Object visitReadExpr(ReadExprContext ctx) {
-    var exprCtx = ctx.expr();
-    checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
+      @Override
+      public Object visitReadExpr(ReadExprContext ctx) {
+        var exprCtx = ctx.expr();
+        checkClosingDelimiter(ctx.err, ")", exprCtx.stop);
 
-    var tokenType = ctx.t.getType();
+        var tokenType = ctx.t.getType();
 
-    if (tokenType == PklLexer.READ) {
-      return ReadNodeGen.create(createSourceSection(ctx), moduleKey, visitExpr(exprCtx));
-    }
-    if (tokenType == PklLexer.READ_OR_NULL) {
-      return ReadOrNullNodeGen.create(createSourceSection(ctx), moduleKey, visitExpr(exprCtx));
-    }
-    assert tokenType == PklLexer.READ_GLOB;
-    return ReadGlobNodeGen.create(createSourceSection(ctx), moduleKey, visitExpr(exprCtx));
-  }
+        if (tokenType == PklLexer.READ) {
+          return ReadNodeGen.create(createSourceSection(ctx), moduleKey,
+                                    visitExpr(exprCtx));
+        }
+        if (tokenType == PklLexer.READ_OR_NULL) {
+          return ReadOrNullNodeGen.create(createSourceSection(ctx), moduleKey,
+                                          visitExpr(exprCtx));
+        }
+        assert tokenType == PklLexer.READ_GLOB;
+        return ReadGlobNodeGen.create(createSourceSection(ctx), moduleKey,
+                                      visitExpr(exprCtx));
+      }
 
-  @Override
-  public Object visitLetExpr(LetExprContext ctx) {
-    checkClosingDelimiter(ctx.err, ")", ctx.l.stop);
+      @Override
+      public Object visitLetExpr(LetExprContext ctx) {
+        checkClosingDelimiter(ctx.err, ")", ctx.l.stop);
 
-    var sourceSection = createSourceSection(ctx);
-    var idCtx = ctx.parameter();
-    var frameBuilder = FrameDescriptor.newBuilder();
-    var isIgnored = isIgnored(idCtx);
-    var typeNodes =
-        isIgnored
-            ? new UnresolvedTypeNode[0]
-            : new UnresolvedTypeNode[] {
-              visitTypeAnnotation(idCtx.typedIdentifier().typeAnnotation())
-            };
-    if (!isIgnored) {
-      frameBuilder.addSlot(
-          FrameSlotKind.Illegal, toIdentifier(idCtx.typedIdentifier().Identifier()), null);
-    }
+        var sourceSection = createSourceSection(ctx);
+        var idCtx = ctx.parameter();
+        var frameBuilder = FrameDescriptor.newBuilder();
+        var isIgnored = isIgnored(idCtx);
+        var typeNodes = isIgnored
+                            ? new UnresolvedTypeNode[0]
+                            : new UnresolvedTypeNode[] {visitTypeAnnotation(
+                                  idCtx.typedIdentifier().typeAnnotation())};
+        if (!isIgnored) {
+          frameBuilder.addSlot(
+              FrameSlotKind.Illegal,
+              toIdentifier(idCtx.typedIdentifier().Identifier()), null);
+        }
 
-    var isCustomThisScope = symbolTable.getCurrentScope().isCustomThisScope();
+        var isCustomThisScope =
+            symbolTable.getCurrentScope().isCustomThisScope();
 
-    UnresolvedFunctionNode functionNode =
-        symbolTable.enterLambda(
-            frameBuilder,
-            scope -> {
+        UnresolvedFunctionNode functionNode =
+            symbolTable.enterLambda(frameBuilder, scope -> {
               var expr = visitExpr(ctx.r);
               return new UnresolvedFunctionNode(
-                  language,
-                  scope.buildFrameDescriptor(),
-                  new Lambda(createSourceSection(ctx.r), scope.getQualifiedName()),
-                  1,
-                  typeNodes,
-                  null,
-                  expr);
+                  language, scope.buildFrameDescriptor(),
+                  new Lambda(createSourceSection(ctx.r),
+                             scope.getQualifiedName()),
+                  1, typeNodes, null, expr);
             });
 
-    return new LetExprNode(sourceSection, functionNode, visitExpr(ctx.l), isCustomThisScope);
-  }
-
-  @Override
-  public ExpressionNode visitThisExpr(ThisExprContext ctx) {
-    if (!(ctx.parent instanceof QualifiedAccessExprContext)) {
-      var currentScope = symbolTable.getCurrentScope();
-      var needsConst =
-          currentScope.getConstLevel() == ConstLevel.ALL
-              && currentScope.getConstDepth() == -1
-              && !currentScope.isCustomThisScope();
-      if (needsConst) {
-        throw exceptionBuilder()
-            .withSourceSection(createSourceSection(ctx))
-            .evalError("thisIsNotConst")
-            .build();
+        return new LetExprNode(sourceSection, functionNode, visitExpr(ctx.l),
+                               isCustomThisScope);
       }
-    }
-    return VmUtils.createThisNode(
-        createSourceSection(ctx), symbolTable.getCurrentScope().isCustomThisScope());
-  }
 
-  // TODO: `outer.` should probably have semantics similar to `super.`,
-  // rather than just performing a lookup in the immediately enclosing object
-  // also, consider interpreting `x = ... x ...` as `x = ... outer.x ...`
-  @Override
-  public OuterNode visitOuterExpr(OuterExprContext ctx) {
-    if (!(ctx.parent instanceof QualifiedAccessExprContext)) {
-      var constLevel = symbolTable.getCurrentScope().getConstLevel();
-      var outerScope = getParentLexicalScope();
-      if (outerScope != null && constLevel.bigger(outerScope.getConstLevel())) {
-        throw exceptionBuilder()
-            .evalError("outerIsNotConst")
-            .withSourceSection(createSourceSection(ctx))
-            .build();
-      }
-    }
-    return new OuterNode(createSourceSection(ctx));
-  }
-
-  @Override
-  public Object visitModuleExpr(ModuleExprContext ctx) {
-    // cannot use unqualified `module` in a const context
-    if (symbolTable.getCurrentScope().getConstLevel().isConst()
-        && !(ctx.parent instanceof QualifiedAccessExprContext)) {
-      var scope = symbolTable.getCurrentScope();
-      while (scope != null
-          && !(scope instanceof AnnotationScope)
-          && !(scope instanceof ClassScope)) {
-        scope = scope.getParent();
-      }
-      if (scope == null) {
-        throw exceptionBuilder()
-            .evalError("moduleIsNotConst", symbolTable.getCurrentScope().getName().toString())
-            .withSourceSection(createSourceSection(ctx))
-            .build();
-      }
-      var messageKey =
-          scope instanceof AnnotationScope ? "moduleIsNotConstAnnotation" : "moduleIsNotConstClass";
-      throw exceptionBuilder()
-          .evalError(messageKey)
-          .withSourceSection(createSourceSection(ctx))
-          .build();
-    }
-    return new GetModuleNode(createSourceSection(ctx));
-  }
-
-  @Override
-  public ExpressionNode visitParenthesizedExpr(ParenthesizedExprContext ctx) {
-    checkClosingDelimiter(ctx.err, ")", ctx.stop);
-
-    return visitExpr(ctx.expr());
-  }
-
-  @Override
-  public Object visitSubscriptExpr(SubscriptExprContext ctx) {
-    checkClosingDelimiter(ctx.err, "]", ctx.stop);
-
-    return SubscriptNodeGen.create(createSourceSection(ctx), visitExpr(ctx.l), visitExpr(ctx.r));
-  }
-
-  @Override
-  public Object visitTypeTestExpr(TypeTestExprContext ctx) {
-    if (ctx.t.getType() == PklLexer.IS) {
-      return new TypeTestNode(createSourceSection(ctx), visitExpr(ctx.l), visitType(ctx.r));
-    }
-
-    assert ctx.t.getType() == PklLexer.AS;
-    return new TypeCastNode(createSourceSection(ctx), visitExpr(ctx.l), visitType(ctx.r));
-  }
-
-  @Override
-  public Object visitUnknownType(UnknownTypeContext ctx) {
-    return new UnresolvedTypeNode.Unknown(createSourceSection(ctx));
-  }
-
-  @Override
-  public Object visitNothingType(NothingTypeContext ctx) {
-    return new UnresolvedTypeNode.Nothing(createSourceSection(ctx));
-  }
-
-  @Override
-  public Object visitModuleType(ModuleTypeContext ctx) {
-    return new UnresolvedTypeNode.Module(createSourceSection(ctx));
-  }
-
-  @Override
-  public Object visitStringLiteralType(StringLiteralTypeContext ctx) {
-    return new UnresolvedTypeNode.StringLiteral(
-        createSourceSection(ctx), visitStringConstant(ctx.stringConstant()));
-  }
-
-  @Override
-  public UnresolvedTypeNode visitType(TypeContext ctx) {
-    return (UnresolvedTypeNode) ctx.accept(this);
-  }
-
-  @Override
-  public UnresolvedTypeNode visitDeclaredType(DeclaredTypeContext ctx) {
-    var idCtx = ctx.qualifiedIdentifier();
-    var argCtx = ctx.typeArgumentList();
-
-    if (argCtx == null) {
-      if (idCtx.ts.size() == 1) {
-        String text = idCtx.ts.get(0).getText();
-        TypeParameter typeParameter = symbolTable.findTypeParameter(text);
-        if (typeParameter != null) {
-          return new UnresolvedTypeNode.TypeVariable(createSourceSection(ctx), typeParameter);
+      @Override
+      public ExpressionNode visitThisExpr(ThisExprContext ctx) {
+        if (!(ctx.parent instanceof QualifiedAccessExprContext)) {
+          var currentScope = symbolTable.getCurrentScope();
+          var needsConst = currentScope.getConstLevel() == ConstLevel.ALL &&
+                           currentScope.getConstDepth() == -1 &&
+                           !currentScope.isCustomThisScope();
+          if (needsConst) {
+            throw exceptionBuilder()
+                .withSourceSection(createSourceSection(ctx))
+                .evalError("thisIsNotConst")
+                .build();
+          }
         }
+        return VmUtils.createThisNode(
+            createSourceSection(ctx),
+            symbolTable.getCurrentScope().isCustomThisScope());
       }
 
-      return new UnresolvedTypeNode.Declared(createSourceSection(ctx), doVisitTypeName(idCtx));
-    }
-
-    checkCommaSeparatedElements(argCtx, argCtx.ts, argCtx.errs);
-    checkClosingDelimiter(argCtx.err, ">", argCtx.stop);
-
-    return new UnresolvedTypeNode.Parameterized(
-        createSourceSection(ctx),
-        doVisitTypeName(idCtx),
-        argCtx.ts.stream().map(this::visitType).toArray(UnresolvedTypeNode[]::new));
-  }
-
-  @Override
-  public UnresolvedTypeNode visitParenthesizedType(ParenthesizedTypeContext ctx) {
-    checkClosingDelimiter(ctx.err, ")", ctx.stop);
-
-    return visitType(ctx.type());
-  }
-
-  @Override
-  public Object visitDefaultUnionType(DefaultUnionTypeContext ctx) {
-    throw exceptionBuilder()
-        .evalError("notAUnion")
-        .withSourceSection(createSourceSection(ctx))
-        .build();
-  }
-
-  @Override
-  public UnresolvedTypeNode visitUnionType(UnionTypeContext ctx) {
-    var elementTypeCtxs = new ArrayList<TypeContext>();
-
-    var result = flattenUnionType(ctx, elementTypeCtxs);
-    boolean isUnionOfStringLiterals = result.first;
-    int defaultIndex = result.second;
-
-    if (isUnionOfStringLiterals) {
-      return new UnresolvedTypeNode.UnionOfStringLiterals(
-          createSourceSection(ctx),
-          defaultIndex,
-          elementTypeCtxs.stream()
-              .map(it -> visitStringConstant(((StringLiteralTypeContext) it).stringConstant()))
-              .collect(Collectors.toCollection(LinkedHashSet::new)));
-    }
-
-    return new UnresolvedTypeNode.Union(
-        createSourceSection(ctx),
-        defaultIndex,
-        elementTypeCtxs.stream().map(this::visitType).toArray(UnresolvedTypeNode[]::new));
-  }
-
-  private Pair<Boolean, Integer> flattenUnionType(
-      UnionTypeContext ctx, List<TypeContext> collector) {
-    boolean isUnionOfStringLiterals = true;
-    int index = 0;
-    int defaultIndex = -1;
-    var list = new ArrayDeque<TypeContext>();
-    list.addLast(ctx.l);
-    list.addLast(ctx.r);
-
-    while (!list.isEmpty()) {
-      var current = list.removeFirst();
-      if (current instanceof UnionTypeContext unionType) {
-        list.addFirst(unionType.r);
-        list.addFirst(unionType.l);
-        continue;
+      // TODO: `outer.` should probably have semantics similar to `super.`,
+      // rather than just performing a lookup in the immediately enclosing
+      // object also, consider interpreting `x = ... x ...` as `x = ... outer.x
+      // ...`
+      @Override
+      public OuterNode visitOuterExpr(OuterExprContext ctx) {
+        if (!(ctx.parent instanceof QualifiedAccessExprContext)) {
+          var constLevel = symbolTable.getCurrentScope().getConstLevel();
+          var outerScope = getParentLexicalScope();
+          if (outerScope != null &&
+              constLevel.bigger(outerScope.getConstLevel())) {
+            throw exceptionBuilder()
+                .evalError("outerIsNotConst")
+                .withSourceSection(createSourceSection(ctx))
+                .build();
+          }
+        }
+        return new OuterNode(createSourceSection(ctx));
       }
-      if (current instanceof DefaultUnionTypeContext defaultUnionType) {
-        if (defaultIndex == -1) {
-          defaultIndex = index;
-        } else {
+
+      @Override
+      public Object visitModuleExpr(ModuleExprContext ctx) {
+        // cannot use unqualified `module` in a const context
+        if (symbolTable.getCurrentScope().getConstLevel().isConst() &&
+            !(ctx.parent instanceof QualifiedAccessExprContext)) {
+          var scope = symbolTable.getCurrentScope();
+          while (scope != null && !(scope instanceof AnnotationScope) &&
+                 !(scope instanceof ClassScope)) {
+            scope = scope.getParent();
+          }
+          if (scope == null) {
+            throw exceptionBuilder()
+                .evalError("moduleIsNotConst",
+                           symbolTable.getCurrentScope().getName().toString())
+                .withSourceSection(createSourceSection(ctx))
+                .build();
+          }
+          var messageKey = scope instanceof AnnotationScope
+                               ? "moduleIsNotConstAnnotation"
+                               : "moduleIsNotConstClass";
           throw exceptionBuilder()
-              .evalError("multipleUnionDefaults")
+              .evalError(messageKey)
               .withSourceSection(createSourceSection(ctx))
               .build();
         }
-        isUnionOfStringLiterals =
-            isUnionOfStringLiterals && defaultUnionType.type() instanceof StringLiteralTypeContext;
-        collector.add(defaultUnionType.type());
-      } else {
-        isUnionOfStringLiterals =
-            isUnionOfStringLiterals && current instanceof StringLiteralTypeContext;
-        collector.add(current);
+        return new GetModuleNode(createSourceSection(ctx));
       }
-      index++;
-    }
-    return Pair.of(isUnionOfStringLiterals, defaultIndex);
-  }
 
-  @Override
-  public UnresolvedTypeNode visitNullableType(NullableTypeContext ctx) {
-    return new UnresolvedTypeNode.Nullable(
-        createSourceSection(ctx), (UnresolvedTypeNode) ctx.type().accept(this));
-  }
+      @Override
+      public ExpressionNode visitParenthesizedExpr(
+          ParenthesizedExprContext ctx) {
+        checkClosingDelimiter(ctx.err, ")", ctx.stop);
 
-  @Override
-  public UnresolvedTypeNode visitConstrainedType(ConstrainedTypeContext ctx) {
-    checkCommaSeparatedElements(ctx, ctx.es, ctx.errs);
-    checkClosingDelimiter(ctx.err, ")", ctx.stop);
+        return visitExpr(ctx.expr());
+      }
 
-    var childNode = (UnresolvedTypeNode) ctx.type().accept(this);
+      @Override
+      public Object visitSubscriptExpr(SubscriptExprContext ctx) {
+        checkClosingDelimiter(ctx.err, "]", ctx.stop);
 
-    return symbolTable.enterCustomThisScope(
-        scope ->
-            new UnresolvedTypeNode.Constrained(
-                createSourceSection(ctx),
-                childNode,
+        return SubscriptNodeGen.create(createSourceSection(ctx),
+                                       visitExpr(ctx.l), visitExpr(ctx.r));
+      }
+
+      @Override
+      public Object visitTypeTestExpr(TypeTestExprContext ctx) {
+        if (ctx.t.getType() == PklLexer.IS) {
+          return new TypeTestNode(createSourceSection(ctx), visitExpr(ctx.l),
+                                  visitType(ctx.r));
+        }
+
+        assert ctx.t.getType() == PklLexer.AS;
+        return new TypeCastNode(createSourceSection(ctx), visitExpr(ctx.l),
+                                visitType(ctx.r));
+      }
+
+      @Override
+      public Object visitUnknownType(UnknownTypeContext ctx) {
+        return new UnresolvedTypeNode.Unknown(createSourceSection(ctx));
+      }
+
+      @Override
+      public Object visitNothingType(NothingTypeContext ctx) {
+        return new UnresolvedTypeNode.Nothing(createSourceSection(ctx));
+      }
+
+      @Override
+      public Object visitModuleType(ModuleTypeContext ctx) {
+        return new UnresolvedTypeNode.Module(createSourceSection(ctx));
+      }
+
+      @Override
+      public Object visitStringLiteralType(StringLiteralTypeContext ctx) {
+        return new UnresolvedTypeNode.StringLiteral(
+            createSourceSection(ctx),
+            visitStringConstant(ctx.stringConstant()));
+      }
+
+      @Override
+      public UnresolvedTypeNode visitType(TypeContext ctx) {
+        return (UnresolvedTypeNode)ctx.accept(this);
+      }
+
+      @Override
+      public UnresolvedTypeNode visitDeclaredType(DeclaredTypeContext ctx) {
+        var idCtx = ctx.qualifiedIdentifier();
+        var argCtx = ctx.typeArgumentList();
+
+        if (argCtx == null) {
+          if (idCtx.ts.size() == 1) {
+            String text = idCtx.ts.get(0).getText();
+            TypeParameter typeParameter = symbolTable.findTypeParameter(text);
+            if (typeParameter != null) {
+              return new UnresolvedTypeNode.TypeVariable(
+                  createSourceSection(ctx), typeParameter);
+            }
+          }
+
+          return new UnresolvedTypeNode.Declared(createSourceSection(ctx),
+                                                 doVisitTypeName(idCtx));
+        }
+
+        checkCommaSeparatedElements(argCtx, argCtx.ts, argCtx.errs);
+        checkClosingDelimiter(argCtx.err, ">", argCtx.stop);
+
+        return new UnresolvedTypeNode.Parameterized(
+            createSourceSection(ctx), doVisitTypeName(idCtx),
+            argCtx.ts.stream()
+                .map(this::visitType)
+                .toArray(UnresolvedTypeNode[] ::new));
+      }
+
+      @Override
+      public UnresolvedTypeNode visitParenthesizedType(
+          ParenthesizedTypeContext ctx) {
+        checkClosingDelimiter(ctx.err, ")", ctx.stop);
+
+        return visitType(ctx.type());
+      }
+
+      @Override
+      public Object visitDefaultUnionType(DefaultUnionTypeContext ctx) {
+        throw exceptionBuilder()
+            .evalError("notAUnion")
+            .withSourceSection(createSourceSection(ctx))
+            .build();
+      }
+
+      @Override
+      public UnresolvedTypeNode visitUnionType(UnionTypeContext ctx) {
+        var elementTypeCtxs = new ArrayList<TypeContext>();
+
+        var result = flattenUnionType(ctx, elementTypeCtxs);
+        boolean isUnionOfStringLiterals = result.first;
+        int defaultIndex = result.second;
+
+        if (isUnionOfStringLiterals) {
+          return new UnresolvedTypeNode.UnionOfStringLiterals(
+              createSourceSection(ctx), defaultIndex,
+              elementTypeCtxs.stream()
+                  .map(it
+                       -> visitStringConstant(
+                           ((StringLiteralTypeContext)it).stringConstant()))
+                  .collect(Collectors.toCollection(LinkedHashSet::new)));
+        }
+
+        return new UnresolvedTypeNode.Union(
+            createSourceSection(ctx), defaultIndex,
+            elementTypeCtxs.stream()
+                .map(this::visitType)
+                .toArray(UnresolvedTypeNode[] ::new));
+      }
+
+      private Pair<Boolean, Integer> flattenUnionType(
+          UnionTypeContext ctx, List<TypeContext> collector) {
+        boolean isUnionOfStringLiterals = true;
+        int index = 0;
+        int defaultIndex = -1;
+        var list = new ArrayDeque<TypeContext>();
+        list.addLast(ctx.l);
+        list.addLast(ctx.r);
+
+        while (!list.isEmpty()) {
+          var current = list.removeFirst();
+          if (current instanceof UnionTypeContext unionType) {
+            list.addFirst(unionType.r);
+            list.addFirst(unionType.l);
+            continue;
+          }
+          if (current instanceof DefaultUnionTypeContext defaultUnionType) {
+            if (defaultIndex == -1) {
+              defaultIndex = index;
+            } else {
+              throw exceptionBuilder()
+                  .evalError("multipleUnionDefaults")
+                  .withSourceSection(createSourceSection(ctx))
+                  .build();
+            }
+            isUnionOfStringLiterals =
+                isUnionOfStringLiterals && defaultUnionType.type() instanceof
+                                               StringLiteralTypeContext;
+            collector.add(defaultUnionType.type());
+          } else {
+            isUnionOfStringLiterals =
+                isUnionOfStringLiterals && current instanceof
+                                               StringLiteralTypeContext;
+            collector.add(current);
+          }
+          index++;
+        }
+        return Pair.of(isUnionOfStringLiterals, defaultIndex);
+      }
+
+      @Override
+      public UnresolvedTypeNode visitNullableType(NullableTypeContext ctx) {
+        return new UnresolvedTypeNode.Nullable(
+            createSourceSection(ctx),
+            (UnresolvedTypeNode)ctx.type().accept(this));
+      }
+
+      @Override
+      public UnresolvedTypeNode visitConstrainedType(
+          ConstrainedTypeContext ctx) {
+        checkCommaSeparatedElements(ctx, ctx.es, ctx.errs);
+        checkClosingDelimiter(ctx.err, ")", ctx.stop);
+
+        var childNode = (UnresolvedTypeNode)ctx.type().accept(this);
+
+        return symbolTable.enterCustomThisScope(
+            scope
+            -> new UnresolvedTypeNode.Constrained(
+                createSourceSection(ctx), childNode,
                 ctx.es.stream()
                     .map(this::visitExpr)
-                    .map(it -> TypeConstraintNodeGen.create(it.getSourceSection(), it))
-                    .toArray(TypeConstraintNode[]::new)));
-  }
+                    .map(it
+                         -> TypeConstraintNodeGen.create(it.getSourceSection(),
+                                                         it))
+                    .toArray(TypeConstraintNode[] ::new)));
+      }
 
-  @Override
-  public UnresolvedTypeNode visitFunctionType(FunctionTypeContext ctx) {
-    checkCommaSeparatedElements(ctx, ctx.ps, ctx.errs);
-    checkClosingDelimiter(
-        ctx.err, ")", ctx.ps.isEmpty() ? ctx.t : ctx.ps.get(ctx.ps.size() - 1).stop);
+      @Override
+      public UnresolvedTypeNode visitFunctionType(FunctionTypeContext ctx) {
+        checkCommaSeparatedElements(ctx, ctx.ps, ctx.errs);
+        checkClosingDelimiter(
+            ctx.err, ")",
+            ctx.ps.isEmpty() ? ctx.t : ctx.ps.get(ctx.ps.size() - 1).stop);
 
-    return new UnresolvedTypeNode.Function(
-        createSourceSection(ctx),
-        ctx.ps.stream().map(this::visitType).toArray(UnresolvedTypeNode[]::new),
-        (UnresolvedTypeNode) ctx.r.accept(this));
-  }
+        return new UnresolvedTypeNode.Function(
+            createSourceSection(ctx),
+            ctx.ps.stream()
+                .map(this::visitType)
+                .toArray(UnresolvedTypeNode[] ::new),
+            (UnresolvedTypeNode)ctx.r.accept(this));
+      }
 
-  private ExpressionNode resolveBaseModuleClass(Identifier className, Supplier<VmClass> clazz) {
-    return isBaseModule
-        ?
-        // Can't access BaseModule.getXYZClass() while parsing base module
-        new GetBaseModuleClassNode(className)
-        : new ConstantValueNode(clazz.get());
-  }
+      private ExpressionNode resolveBaseModuleClass(Identifier className,
+                                                    Supplier<VmClass> clazz) {
+        return isBaseModule
+            ?
+            // Can't access BaseModule.getXYZClass() while parsing base module
+            new GetBaseModuleClassNode(className)
+            : new ConstantValueNode(clazz.get());
+      }
 
-  private UnresolvedPropertyNode[] doVisitClassProperties(
-      List<ClassPropertyContext> propertyContexts, Set<String> propertyNames) {
-    var propertyNodes = new UnresolvedPropertyNode[propertyContexts.size()];
+      private UnresolvedPropertyNode[] doVisitClassProperties(
+          List<ClassPropertyContext> propertyContexts,
+          Set<String> propertyNames) {
+        var propertyNodes = new UnresolvedPropertyNode[propertyContexts.size()];
 
-    for (var i = 0; i < propertyNodes.length; i++) {
-      var propertyCtx = propertyContexts.get(i);
-      var propertyNode = visitClassProperty(propertyCtx);
-      checkDuplicateMember(propertyNode.getName(), propertyNode.getHeaderSection(), propertyNames);
-      propertyNodes[i] = propertyNode;
-    }
+        for (var i = 0; i < propertyNodes.length; i++) {
+          var propertyCtx = propertyContexts.get(i);
+          var propertyNode = visitClassProperty(propertyCtx);
+          checkDuplicateMember(propertyNode.getName(),
+                               propertyNode.getHeaderSection(), propertyNames);
+          propertyNodes[i] = propertyNode;
+        }
 
-    return propertyNodes;
-  }
+        return propertyNodes;
+      }
 
-  private UnresolvedMethodNode[] doVisitMethodDefs(List<ClassMethodContext> methodDefs) {
-    var methodNodes = new UnresolvedMethodNode[methodDefs.size()];
-    var methodNames = CollectionUtils.<String>newHashSet(methodDefs.size());
+      private UnresolvedMethodNode[] doVisitMethodDefs(
+          List<ClassMethodContext> methodDefs) {
+        var methodNodes = new UnresolvedMethodNode[methodDefs.size()];
+        var methodNames = CollectionUtils.<String>newHashSet(methodDefs.size());
 
-    for (var i = 0; i < methodNodes.length; i++) {
-      var methodNode = visitClassMethod(methodDefs.get(i));
-      checkDuplicateMember(methodNode.getName(), methodNode.getHeaderSection(), methodNames);
-      methodNodes[i] = methodNode;
-    }
+        for (var i = 0; i < methodNodes.length; i++) {
+          var methodNode = visitClassMethod(methodDefs.get(i));
+          checkDuplicateMember(methodNode.getName(),
+                               methodNode.getHeaderSection(), methodNames);
+          methodNodes[i] = methodNode;
+        }
 
-    return methodNodes;
-  }
+        return methodNodes;
+      }
 
-  private EconomicMap<Object, ObjectMember> doVisitModuleProperties(
-      List<ImportClauseContext> importCtxs,
-      List<ClazzContext> classCtxs,
-      List<TypeAliasContext> typeAliasCtxs,
-      List<ClassPropertyContext> propertyCtxs,
-      Set<String> propertyNames,
-      ModuleInfo moduleInfo) {
+      private EconomicMap<Object, ObjectMember> doVisitModuleProperties(
+          List<ImportClauseContext> importCtxs, List<ClazzContext> classCtxs,
+          List<TypeAliasContext> typeAliasCtxs,
+          List<ClassPropertyContext> propertyCtxs, Set<String> propertyNames,
+          ModuleInfo moduleInfo) {
 
-    var totalSize = importCtxs.size() + classCtxs.size() + typeAliasCtxs.size();
-    var result = EconomicMaps.<Object, ObjectMember>create(totalSize);
+        var totalSize =
+            importCtxs.size() + classCtxs.size() + typeAliasCtxs.size();
+        var result = EconomicMaps.<Object, ObjectMember>create(totalSize);
 
-    for (var ctx : importCtxs) {
-      var member = visitImportClause(ctx);
-      checkDuplicateMember(member.getName(), member.getHeaderSection(), propertyNames);
-      EconomicMaps.put(result, member.getName(), member);
-    }
+        for (var ctx : importCtxs) {
+          var member = visitImportClause(ctx);
+          checkDuplicateMember(member.getName(), member.getHeaderSection(),
+                               propertyNames);
+          EconomicMaps.put(result, member.getName(), member);
+        }
 
-    for (var ctx : classCtxs) {
-      ObjectMember member = visitClazz(ctx);
+        for (var ctx : classCtxs) {
+          ObjectMember member = visitClazz(ctx);
 
-      if (moduleInfo.isAmend() && !member.isLocal()) {
+          if (moduleInfo.isAmend() && !member.isLocal()) {
+            throw exceptionBuilder()
+                .evalError("classMustBeLocal")
+                .withSourceSection(member.getHeaderSection())
+                .build();
+          }
+
+          checkDuplicateMember(member.getName(), member.getHeaderSection(),
+                               propertyNames);
+          EconomicMaps.put(result, member.getName(), member);
+        }
+
+        for (TypeAliasContext ctx : typeAliasCtxs) {
+          var member = visitTypeAlias(ctx);
+
+          if (moduleInfo.isAmend() && !member.isLocal()) {
+            throw exceptionBuilder()
+                .evalError("typeAliasMustBeLocal")
+                .withSourceSection(member.getHeaderSection())
+                .build();
+          }
+
+          checkDuplicateMember(member.getName(), member.getHeaderSection(),
+                               propertyNames);
+          EconomicMaps.put(result, member.getName(), member);
+        }
+
+        for (var ctx : propertyCtxs) {
+          var member = doVisitObjectProperty(
+              ctx, ctx.modifier(), ctx.Identifier(), ctx.typeAnnotation(),
+              ctx.expr(), ctx.objectBody());
+
+          if (moduleInfo.isAmend() && !member.isLocal() &&
+              ctx.typeAnnotation() != null) {
+            throw exceptionBuilder()
+                .evalError("nonLocalObjectPropertyCannotHaveTypeAnnotation")
+                .withSourceSection(
+                    createSourceSection(ctx.typeAnnotation().type()))
+                .build();
+          }
+
+          checkDuplicateMember(member.getName(), member.getHeaderSection(),
+                               propertyNames);
+          EconomicMaps.put(result, member.getName(), member);
+        }
+
+        return result;
+      }
+
+      private void checkDuplicateMember(
+          Identifier memberName, SourceSection headerSection,
+          // use Set<String> rather than Set<Identifier>
+          // to detect conflicts between local and non-local identifiers
+          Set<String> visited) {
+
+        if (!visited.add(memberName.toString())) {
+          throw exceptionBuilder()
+              .evalError("duplicateDefinition", memberName)
+              .withSourceSection(headerSection)
+              .build();
+        }
+      }
+
+      // TODO: use Set<String> and checkDuplicateMember() to find duplicates
+      // between local and non-local properties
+      private void addProperty(EconomicMap<Object, ObjectMember> objectMembers,
+                               ObjectMember property) {
+        if (EconomicMaps.put(objectMembers, property.getName(), property) !=
+            null) {
+          throw exceptionBuilder()
+              .evalError("duplicateDefinition", property.getName())
+              .withSourceSection(property.getHeaderSection())
+              .build();
+        }
+      }
+
+      private void invalidSeparatorPosition(SourceSection source) {
         throw exceptionBuilder()
-            .evalError("classMustBeLocal")
-            .withSourceSection(member.getHeaderSection())
+            .evalError("invalidSeparatorPosition")
+            .withSourceSection(source)
             .build();
       }
 
-      checkDuplicateMember(member.getName(), member.getHeaderSection(), propertyNames);
-      EconomicMaps.put(result, member.getName(), member);
-    }
+      private AbstractImportNode doVisitImport(
+          int lexerToken, ParserRuleContext ctx,
+          StringConstantContext importUriCtx) {
+        var isGlobImport = lexerToken == PklLexer.IMPORT_GLOB;
+        var section = createSourceSection(ctx);
+        var importUri = visitStringConstant(importUriCtx);
+        if (isGlobImport && importUri.startsWith("...")) {
+          throw exceptionBuilder()
+              .evalError("cannotGlobTripleDots")
+              .withSourceSection(section)
+              .build();
+        }
+        var resolvedUri = resolveImport(importUri, importUriCtx);
+        if (isGlobImport) {
+          return new ImportGlobNode(section, moduleInfo.getResolvedModuleKey(),
+                                    resolvedUri, importUri);
+        }
+        return new ImportNode(language, section,
+                              moduleInfo.getResolvedModuleKey(), resolvedUri);
+      }
 
-    for (TypeAliasContext ctx : typeAliasCtxs) {
-      var member = visitTypeAlias(ctx);
+      private SourceSection startOf(TerminalNode node) {
+        return startOf(node.getSymbol());
+      }
 
-      if (moduleInfo.isAmend() && !member.isLocal()) {
+      private SourceSection startOf(Token token) {
+        return source.createSection(token.getStartIndex(), 1);
+      }
+
+      private SourceSection shrinkLeft(SourceSection section, int length) {
+        return source.createSection(section.getCharIndex() + length,
+                                    section.getCharLength() - length);
+      }
+
+      private VmException createUnexpectedTokenError(Token token) {
+        return exceptionBuilder().bug("Unexpected token `%s`.", token).build();
+      }
+
+      @Override
+      protected VmExceptionBuilder exceptionBuilder() {
+        return new VmExceptionBuilder().withMemberName(
+            symbolTable.getCurrentScope().getQualifiedName());
+      }
+
+      private static SourceSection unavailableSourceSection() {
+        return VmUtils.unavailableSourceSection();
+      }
+
+      private String getCommonIndent(MultiLineStringPartContext lastPart,
+                                     Token endQuoteToken) {
+        if (lastPart.e != null) {
+          throw exceptionBuilder()
+              .evalError("closingStringDelimiterMustBeginOnNewLine")
+              .withSourceSection(startOf(endQuoteToken))
+              .build();
+        }
+
+        var tokens = lastPart.ts;
+        assert !tokens.isEmpty();
+        var lastToken = tokens.get(tokens.size() - 1);
+
+        if (lastToken.getType() == PklLexer.MLNewline) {
+          return "";
+        }
+
+        if (tokens.size() > 1) {
+          var lastButOneToken = tokens.get(tokens.size() - 2);
+          if (lastButOneToken.getType() == PklLexer.MLNewline &&
+              isIndentChars(lastToken)) {
+            return lastToken.getText();
+          }
+        }
+
         throw exceptionBuilder()
-            .evalError("typeAliasMustBeLocal")
-            .withSourceSection(member.getHeaderSection())
+            .evalError("closingStringDelimiterMustBeginOnNewLine")
+            .withSourceSection(startOf(endQuoteToken))
             .build();
       }
 
-      checkDuplicateMember(member.getName(), member.getHeaderSection(), propertyNames);
-      EconomicMaps.put(result, member.getName(), member);
-    }
+      public static boolean isIndentChars(Token token) {
+        var text = token.getText();
 
-    for (var ctx : propertyCtxs) {
-      var member =
-          doVisitObjectProperty(
-              ctx,
-              ctx.modifier(),
-              ctx.Identifier(),
-              ctx.typeAnnotation(),
-              ctx.expr(),
-              ctx.objectBody());
+        for (var i = 0; i < text.length(); i++) {
+          var ch = text.charAt(i);
+          if (ch != ' ' && ch != '\t')
+            return false;
+        }
 
-      if (moduleInfo.isAmend() && !member.isLocal() && ctx.typeAnnotation() != null) {
-        throw exceptionBuilder()
-            .evalError("nonLocalObjectPropertyCannotHaveTypeAnnotation")
-            .withSourceSection(createSourceSection(ctx.typeAnnotation().type()))
-            .build();
+        return true;
       }
 
-      checkDuplicateMember(member.getName(), member.getHeaderSection(), propertyNames);
-      EconomicMaps.put(result, member.getName(), member);
-    }
+      public static String getLeadingIndent(Token token) {
+        var text = token.getText();
 
-    return result;
-  }
+        for (var i = 0; i < text.length(); i++) {
+          var ch = text.charAt(i);
+          if (ch != ' ' && ch != '\t') {
+            return text.substring(0, i);
+          }
+        }
 
-  private void checkDuplicateMember(
-      Identifier memberName,
-      SourceSection headerSection,
-      // use Set<String> rather than Set<Identifier>
-      // to detect conflicts between local and non-local identifiers
-      Set<String> visited) {
-
-    if (!visited.add(memberName.toString())) {
-      throw exceptionBuilder()
-          .evalError("duplicateDefinition", memberName)
-          .withSourceSection(headerSection)
-          .build();
-    }
-  }
-
-  // TODO: use Set<String> and checkDuplicateMember() to find duplicates between local and non-local
-  // properties
-  private void addProperty(EconomicMap<Object, ObjectMember> objectMembers, ObjectMember property) {
-    if (EconomicMaps.put(objectMembers, property.getName(), property) != null) {
-      throw exceptionBuilder()
-          .evalError("duplicateDefinition", property.getName())
-          .withSourceSection(property.getHeaderSection())
-          .build();
-    }
-  }
-
-  private void invalidSeparatorPosition(SourceSection source) {
-    throw exceptionBuilder()
-        .evalError("invalidSeparatorPosition")
-        .withSourceSection(source)
-        .build();
-  }
-
-  private AbstractImportNode doVisitImport(
-      int lexerToken, ParserRuleContext ctx, StringConstantContext importUriCtx) {
-    var isGlobImport = lexerToken == PklLexer.IMPORT_GLOB;
-    var section = createSourceSection(ctx);
-    var importUri = visitStringConstant(importUriCtx);
-    if (isGlobImport && importUri.startsWith("...")) {
-      throw exceptionBuilder().evalError("cannotGlobTripleDots").withSourceSection(section).build();
-    }
-    var resolvedUri = resolveImport(importUri, importUriCtx);
-    if (isGlobImport) {
-      return new ImportGlobNode(section, moduleInfo.getResolvedModuleKey(), resolvedUri, importUri);
-    }
-    return new ImportNode(language, section, moduleInfo.getResolvedModuleKey(), resolvedUri);
-  }
-
-  private SourceSection startOf(TerminalNode node) {
-    return startOf(node.getSymbol());
-  }
-
-  private SourceSection startOf(Token token) {
-    return source.createSection(token.getStartIndex(), 1);
-  }
-
-  private SourceSection shrinkLeft(SourceSection section, int length) {
-    return source.createSection(section.getCharIndex() + length, section.getCharLength() - length);
-  }
-
-  private VmException createUnexpectedTokenError(Token token) {
-    return exceptionBuilder().bug("Unexpected token `%s`.", token).build();
-  }
-
-  @Override
-  protected VmExceptionBuilder exceptionBuilder() {
-    return new VmExceptionBuilder()
-        .withMemberName(symbolTable.getCurrentScope().getQualifiedName());
-  }
-
-  private static SourceSection unavailableSourceSection() {
-    return VmUtils.unavailableSourceSection();
-  }
-
-  private String getCommonIndent(MultiLineStringPartContext lastPart, Token endQuoteToken) {
-    if (lastPart.e != null) {
-      throw exceptionBuilder()
-          .evalError("closingStringDelimiterMustBeginOnNewLine")
-          .withSourceSection(startOf(endQuoteToken))
-          .build();
-    }
-
-    var tokens = lastPart.ts;
-    assert !tokens.isEmpty();
-    var lastToken = tokens.get(tokens.size() - 1);
-
-    if (lastToken.getType() == PklLexer.MLNewline) {
-      return "";
-    }
-
-    if (tokens.size() > 1) {
-      var lastButOneToken = tokens.get(tokens.size() - 2);
-      if (lastButOneToken.getType() == PklLexer.MLNewline && isIndentChars(lastToken)) {
-        return lastToken.getText();
+        return text;
       }
-    }
 
-    throw exceptionBuilder()
-        .evalError("closingStringDelimiterMustBeginOnNewLine")
-        .withSourceSection(startOf(endQuoteToken))
-        .build();
-  }
+      private ExpressionNode doVisitMultiLineStringPart(
+          MultiLineStringPartContext ctx, String commonIndent,
+          boolean isStringStart, boolean isStringEnd) {
 
-  public static boolean isIndentChars(Token token) {
-    var text = token.getText();
+        if (ctx.e != null) {
+          return ToStringNodeGen.create(createSourceSection(ctx),
+                                        visitExpr(ctx.e));
+        }
 
-    for (var i = 0; i < text.length(); i++) {
-      var ch = text.charAt(i);
-      if (ch != ' ' && ch != '\t') return false;
-    }
-
-    return true;
-  }
-
-  public static String getLeadingIndent(Token token) {
-    var text = token.getText();
-
-    for (var i = 0; i < text.length(); i++) {
-      var ch = text.charAt(i);
-      if (ch != ' ' && ch != '\t') {
-        return text.substring(0, i);
+        return new ConstantValueNode(
+            createSourceSection(ctx),
+            doVisitMultiLineConstantStringPart(ctx.ts, commonIndent,
+                                               isStringStart, isStringEnd));
       }
-    }
 
-    return text;
-  }
+      private String doVisitMultiLineConstantStringPart(
+          List<Token> tokens, String commonIndent, boolean isStringStart,
+          boolean isStringEnd) {
 
-  private ExpressionNode doVisitMultiLineStringPart(
-      MultiLineStringPartContext ctx,
-      String commonIndent,
-      boolean isStringStart,
-      boolean isStringEnd) {
+        int startIndex = 0;
+        if (isStringStart) {
+          // skip leading newline token
+          startIndex = 1;
+        }
 
-    if (ctx.e != null) {
-      return ToStringNodeGen.create(createSourceSection(ctx), visitExpr(ctx.e));
-    }
+        var endIndex = tokens.size() - 1;
+        if (isStringEnd) {
+          if (tokens.get(endIndex).getType() == PklLexer.MLNewline) {
+            // skip trailing newline token
+            endIndex -= 1;
+          } else {
+            // skip trailing newline and whitespace (common indent) tokens
+            endIndex -= 2;
+          }
+        }
 
-    return new ConstantValueNode(
-        createSourceSection(ctx),
-        doVisitMultiLineConstantStringPart(ctx.ts, commonIndent, isStringStart, isStringEnd));
-  }
+        var builder = new StringBuilder();
+        var isLineStart = isStringStart;
 
-  private String doVisitMultiLineConstantStringPart(
-      List<Token> tokens, String commonIndent, boolean isStringStart, boolean isStringEnd) {
+        for (var i = startIndex; i <= endIndex; i++) {
+          Token token = tokens.get(i);
 
-    int startIndex = 0;
-    if (isStringStart) {
-      // skip leading newline token
-      startIndex = 1;
-    }
-
-    var endIndex = tokens.size() - 1;
-    if (isStringEnd) {
-      if (tokens.get(endIndex).getType() == PklLexer.MLNewline) {
-        // skip trailing newline token
-        endIndex -= 1;
-      } else {
-        // skip trailing newline and whitespace (common indent) tokens
-        endIndex -= 2;
-      }
-    }
-
-    var builder = new StringBuilder();
-    var isLineStart = isStringStart;
-
-    for (var i = startIndex; i <= endIndex; i++) {
-      Token token = tokens.get(i);
-
-      switch (token.getType()) {
+          switch (token.getType()) {
         case PklLexer.MLNewline -> {
           builder.append('\n');
           isLineStart = true;
@@ -2873,76 +2823,86 @@ public final class AstBuilder extends AbstractAstBuilder<Object> {
     // O(n^2) but only runs once a syntax error has been detected
     ParseTree prevChild = null;
     for (ParseTree child : ctx.children) {
-      @SuppressWarnings("SuspiciousMethodCalls")
-      var index = elements.indexOf(child);
-      if (index > 0) { // 0 rather than -1 because no separator is expected before first element
-        assert prevChild != null;
-        if (!(prevChild instanceof TerminalNode terminalNode)
-            || !separators.contains(terminalNode.getSymbol())) {
-          var prevToken =
-              prevChild instanceof TerminalNode terminalNode
-                  ? terminalNode.getSymbol()
-                  : ((ParserRuleContext) prevChild).getStop();
-          throw exceptionBuilder()
-              .evalError("missingCommaSeparator")
-              .withSourceSection(source.createSection(prevToken.getStopIndex() + 1, 1))
+            @SuppressWarnings("SuspiciousMethodCalls")
+            var index = elements.indexOf(child);
+            if (index > 0) { // 0 rather than -1 because no separator is
+                             // expected before first element
+              assert prevChild != null;
+              if (!(prevChild instanceof TerminalNode terminalNode) ||
+                  !separators.contains(terminalNode.getSymbol())) {
+                var prevToken = prevChild instanceof TerminalNode terminalNode
+                                    ? terminalNode.getSymbol()
+                                    : ((ParserRuleContext)prevChild).getStop();
+                throw exceptionBuilder()
+                    .evalError("missingCommaSeparator")
+                    .withSourceSection(
+                        source.createSection(prevToken.getStopIndex() + 1, 1))
+                    .build();
+              }
+            }
+            prevChild = child;
+          }
+
+          throw exceptionBuilder().unreachableCode().build();
+        }
+
+        private void checkClosingDelimiter(@Nullable Token delimiter,
+                                           String delimiterSymbol,
+                                           Token tokenBeforeDelimiter) {
+
+          if (delimiter == null) {
+            throw missingDelimiter(delimiterSymbol,
+                                   tokenBeforeDelimiter.getStopIndex() + 1);
+          }
+        }
+
+        private void checkSingleLineStringDelimiters(Token openingDelimiter,
+                                                     Token closingDelimiter) {
+          var closingText = closingDelimiter.getText();
+          var lastChar = closingText.charAt(closingText.length() - 1);
+          if (lastChar == '"' || lastChar == '#')
+            return;
+
+          assert lastChar == '\n' || lastChar == '\r';
+          var openingText = openingDelimiter.getText();
+          throw missingDelimiter(
+              "\"" + openingText.substring(0, openingText.length() - 1),
+              closingDelimiter.getStopIndex());
+        }
+
+        private VmException missingDelimiter(String delimiter, int charIndex) {
+          return exceptionBuilder()
+              .evalError("missingDelimiter", delimiter)
+              .withSourceSection(source.createSection(charIndex, 0))
               .build();
         }
-      }
-      prevChild = child;
-    }
 
-    throw exceptionBuilder().unreachableCode().build();
-  }
+        private VmException wrongDelimiter(String expected, String actual,
+                                           int charIndex) {
+          return exceptionBuilder()
+              .evalError("wrongDelimiter", expected, actual)
+              .withSourceSection(source.createSection(charIndex, 0))
+              .build();
+        }
 
-  private void checkClosingDelimiter(
-      @Nullable Token delimiter, String delimiterSymbol, Token tokenBeforeDelimiter) {
+        private VmException danglingDelimiter(String delimiter, int charIndex) {
+          return exceptionBuilder()
+              .evalError("danglingDelimiter", delimiter)
+              .withSourceSection(source.createSection(charIndex, 0))
+              .build();
+        }
 
-    if (delimiter == null) {
-      throw missingDelimiter(delimiterSymbol, tokenBeforeDelimiter.getStopIndex() + 1);
-    }
-  }
+        private @Nullable Scope getParentLexicalScope() {
+          var parent =
+              symbolTable.getCurrentScope().getLexicalScope().getParent();
+          if (parent != null)
+            return parent.getLexicalScope();
+          return null;
+        }
 
-  private void checkSingleLineStringDelimiters(Token openingDelimiter, Token closingDelimiter) {
-    var closingText = closingDelimiter.getText();
-    var lastChar = closingText.charAt(closingText.length() - 1);
-    if (lastChar == '"' || lastChar == '#') return;
-
-    assert lastChar == '\n' || lastChar == '\r';
-    var openingText = openingDelimiter.getText();
-    throw missingDelimiter(
-        "\"" + openingText.substring(0, openingText.length() - 1), closingDelimiter.getStopIndex());
-  }
-
-  private VmException missingDelimiter(String delimiter, int charIndex) {
-    return exceptionBuilder()
-        .evalError("missingDelimiter", delimiter)
-        .withSourceSection(source.createSection(charIndex, 0))
-        .build();
-  }
-
-  private VmException wrongDelimiter(String expected, String actual, int charIndex) {
-    return exceptionBuilder()
-        .evalError("wrongDelimiter", expected, actual)
-        .withSourceSection(source.createSection(charIndex, 0))
-        .build();
-  }
-
-  private VmException danglingDelimiter(String delimiter, int charIndex) {
-    return exceptionBuilder()
-        .evalError("danglingDelimiter", delimiter)
-        .withSourceSection(source.createSection(charIndex, 0))
-        .build();
-  }
-
-  private @Nullable Scope getParentLexicalScope() {
-    var parent = symbolTable.getCurrentScope().getLexicalScope().getParent();
-    if (parent != null) return parent.getLexicalScope();
-    return null;
-  }
-
-  private ConstLevel getConstLevel(int modifiers) {
-    if (VmModifier.isConst(modifiers)) return ConstLevel.ALL;
-    return symbolTable.getCurrentScope().getConstLevel();
-  }
-}
+        private ConstLevel getConstLevel(int modifiers) {
+          if (VmModifier.isConst(modifiers))
+            return ConstLevel.ALL;
+          return symbolTable.getCurrentScope().getConstLevel();
+        }
+        }
